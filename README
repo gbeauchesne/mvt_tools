@@ -1,0 +1,20 @@
+
+  Media Validation Tools (MVT)
+
+  Copyright (C) 2013-2014 Intel Corporation
+    Author: Gwenole Beauchesne <gwenole.beauchesne@intel.com>
+
+
+License
+-------
+
+Media Validation Tools (MVT) are available under the terms of the GNU
+Lesser General Public License v2.1+
+
+
+Overview
+--------
+
+Media Validation Tools (MVT) consist in a collection of programs to
+test conformance of VA-API based decoders in native, or simulated
+environments.
