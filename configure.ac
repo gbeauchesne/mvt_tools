@@ -11,6 +11,18 @@ m4_append([mvt_version], mvt_pre_version, [.pre])
 
 # Configure defaults
 m4_define([default_renderer],           [drm])
+m4_define([default_gstreamer],          [yes])
+
+# glib version number
+m4_define([glib_version],               [2.28])
+
+# gstreamer version number
+m4_define([gst_api_version],            [autodetect])
+m4_define([gst0_version],               [0.10.36])
+m4_define([gst1_version],               [1.2.0])
+
+# gstreamer-vaapi version number
+m4_define([gst_vaapi_version],          [0.5.4])
 
 # VA-API minimum version number
 m4_define([va_api_version],             [0.30.4])
@@ -51,11 +63,21 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])], [
 ])
 
 dnl Configure options
+AC_ARG_ENABLE([gstreamer],
+    AS_HELP_STRING([--enable-gstreamer],
+                   [build GStreamer module @<:@default=default_gstreamer@:>@]),
+    [], [enable_gstreamer=default_gstreamer])
+
 AC_ARG_WITH([renderer],
     AC_HELP_STRING([--with-renderer=API],
                    [build with the specified rendering API
                     @<:@default=default_renderer@:>@]),
     [MVT_RENDERER="$with_renderer"], [MVT_RENDERER=default_renderer])
+AC_ARG_WITH([gstreamer-api],
+    AC_HELP_STRING([--with-gstreamer-api=VERSION],
+                   [build against the specified GStreamer API version
+                    @<:@default=gst_api_version@:>@]),
+    [GST_API_VERSION="$with_gstreamer_api"], [GST_API_VERSION=gst_api_version])
 
 dnl Check for tools
 AC_PROG_CC
@@ -77,6 +99,11 @@ MVT_LT_VERSION="$MVT_LT_CURRENT:$MVT_LT_REV:$MVT_LT_AGE"
 MVT_LT_LDFLAGS="-version-info $MVT_LT_VERSION"
 AC_SUBST([MVT_LT_VERSION])
 AC_SUBST([MVT_LT_LDFLAGS])
+
+dnl Check for GLib
+GLIB_VERSION_REQUIRED=glib_version
+PKG_CHECK_MODULES([GLIB], [glib-2.0 >= $GLIB_VERSION_REQUIRED])
+AC_SUBST([GLIB_VERSION_REQUIRED])
 
 dnl ---------------------------------------------------------------------------
 dnl -- Renderers                                                             --
@@ -156,8 +183,95 @@ AC_DEFINE_UNQUOTED([USE_VA_X11], [$USE_VA_X11],
 AM_CONDITIONAL([USE_VA_X11], [test $USE_VA_X11 -eq 1])
 
 dnl ---------------------------------------------------------------------------
+dnl -- GStreamer                                                             --
+dnl ---------------------------------------------------------------------------
+
+dnl Versions for GStreamer and plugins-base
+dnl If GStreamer API version is to be autodetected, then always try
+dnl with the latest version first
+if test "$enable_gstreamer" = "yes"; then
+    AC_MSG_CHECKING([for GStreamer API version])
+    if test "$GST_API_VERSION" = "autodetect"; then
+        gst_api_versions="1.0"
+    else
+        gst_api_versions="$GST_API_VERSION"
+    fi
+    for gst_api_version in ${gst_api_versions}; do
+        if $PKG_CONFIG --exists "gstreamer-$gst_api_version"; then
+            GST_API_VERSION="$gst_api_version"
+            break
+        fi
+    done
+    if test -z "$GST_API_VERSION"; then
+        AC_MSG_ERROR([version $GST_API_VERSION not found])
+    fi
+    AC_MSG_RESULT([$GST_API_VERSION])
+fi
+
+dnl Versions for GStreamer
+if test "$enable_gstreamer" = "yes"; then
+    case $GST_API_VERSION in
+    1.0)
+        GST_VERSION_REQUIRED=gst1_version
+        ;;
+    *)
+        AC_MSG_ERROR([unsupported GStreamer API version $GST_API_VERSION])
+        ;;
+    esac
+fi
+AC_SUBST([GST_API_VERSION])
+AC_SUBST([GST_VERSION_REQUIRED])
+
+dnl GStreamer/VA-API libraries
+GST_VAAPI_VERSION=gst_vaapi_version
+AC_SUBST([GST_VAAPI_VERSION])
+
+if test "$enable_gstreamer" = "yes"; then
+    PKG_CHECK_MODULES([GST_VAAPI],
+        [gstreamer-vaapi-$GST_API_VERSION >= $GST_VAAPI_VERSION])
+    PKG_CHECK_MODULES([GST_VIDEO],
+        [gstreamer-video-$GST_API_VERSION >= $GST_VERSION_REQUIRED])
+fi
+
+dnl Check for DRM backend
+USE_GST_VAAPI_BACKEND_DRM=0
+if test "$enable_gstreamer" = "yes" -a "$MVT_RENDERER" = "drm"; then
+    PKG_CHECK_MODULES([GST_VAAPI_DRM],
+        [gstreamer-vaapi-drm-$GST_API_VERSION >= $GST_VAAPI_VERSION])
+
+    saved_CPPFLAGS="$CPPFLAGS"
+    CPPFLAGS="$CPPFLAGS $GST_VAAPI_DRM_CFLAGS $GST_VAAPI_CFLAGS"
+    AC_CHECK_HEADERS([gst/vaapi/gstvaapidisplay_drm.h],
+        [USE_GST_VAAPI_BACKEND_DRM=1])
+    CPPFLAGS="$saved_CPPFLAGS"
+fi
+
+dnl Check for X11 backend
+USE_GST_VAAPI_BACKEND_X11=0
+if test "$enable_gstreamer" = "yes" -a "$MVT_RENDERER" = "x11"; then
+    PKG_CHECK_MODULES([GST_VAAPI_X11],
+        [gstreamer-vaapi-x11-$GST_API_VERSION >= $GST_VAAPI_VERSION])
+
+    saved_CPPFLAGS="$CPPFLAGS"
+    CPPFLAGS="$CPPFLAGS $GST_VAAPI_X11_CFLAGS $GST_VAAPI_CFLAGS"
+    AC_CHECK_HEADERS([gst/vaapi/gstvaapidisplay_x11.h],
+        [USE_GST_VAAPI_BACKEND_X11=1])
+    CPPFLAGS="$saved_CPPFLAGS"
+fi
+
+dnl ---------------------------------------------------------------------------
 dnl -- Generate files and summary                                            --
 dnl ---------------------------------------------------------------------------
+
+AM_CONDITIONAL([ENABLE_GSTREAMER],      [test "$enable_gstreamer" = "yes"])
+
+AC_DEFINE_UNQUOTED([GST_VAAPI_BACKEND_DRM], [$USE_GST_VAAPI_BACKEND_DRM],
+    [Defined to 1 if gstreamer-vaapi (DRM) backend is enabled])
+AM_CONDITIONAL([GST_VAAPI_BACKEND_DRM], [test $USE_GST_VAAPI_BACKEND_DRM -eq 1])
+
+AC_DEFINE_UNQUOTED([GST_VAAPI_BACKEND_X11], [$USE_GST_VAAPI_BACKEND_X11],
+    [Defined to 1 if gstreamer-vaapi (X11) backend is enabled])
+AM_CONDITIONAL([GST_VAAPI_BACKEND_X11], [test $USE_GST_VAAPI_BACKEND_X11 -eq 1])
 
 AC_CONFIG_FILES([
     Makefile
@@ -174,4 +288,8 @@ echo $PACKAGE configuration summary:
 echo
 echo Renderer ......................... : $MVT_RENDERER_NAME
 echo VA-API version ................... : $VA_VERSION_STR
+echo Enable GStreamer ................. : $enable_gstreamer
+if test "$enable_gstreamer" = "yes"; then
+echo GStreamer API version ............ : $GST_API_VERSION
+fi
 echo

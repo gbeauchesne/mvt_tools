@@ -18,3 +18,20 @@ Overview
 Media Validation Tools (MVT) consist in a collection of programs to
 test conformance of VA-API based decoders in native, or simulated
 environments.
+
+
+Features
+--------
+
+  * GStreamer decoders
+
+
+Requirements
+------------
+
+Software requirements
+
+  * GStreamer 1.2.x:
+      libglib2.0-dev (>= 2.28)
+      libgstreamer1.0-dev (>= 1.2.0)
+      libgstreamer-plugins-bad1.0-dev (>= 1.2.0)

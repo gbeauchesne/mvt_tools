@@ -1,6 +1,9 @@
 lib_LTLIBRARIES = libmvt_utils.la
 
 pkglibexec_PROGRAMS =
+if ENABLE_GSTREAMER
+pkglibexec_PROGRAMS += dec_gstreamer
+endif
 
 # -----------------------------------------------------------------------------
 # --- MVT Utilities                                                         ---
@@ -70,10 +73,54 @@ libmvt_utils_la_LIBADD	= $(mvt_utils_libs)
 mvt_decoder_source_c = mvt_decoder.c
 mvt_decoder_source_h = mvt_decoder.h
 
+# -----------------------------------------------------------------------------
+# --- GStreamer decoder module                                              ---
+# -----------------------------------------------------------------------------
+
+dec_gstreamer_cflags = \
+	$(mvt_utils_cflags)	\
+	$(GLIB_CFLAGS)		\
+	$(NULL)
+
+dec_gstreamer_libs = \
+	libmvt_utils.la		\
+	$(mvt_utils_libs)	\
+	$(GLIB_LIBS)		\
+	$(NULL)
+
+dec_gstreamer_source_c = \
+	$(mvt_decoder_source_c)	\
+	dec_gstreamer.c		\
+	$(NULL)
+
+dec_gstreamer_source_h = \
+	$(mvt_decoder_source_h)	\
+	$(NULL)
+
+dec_gstreamer_cflags	+= -DGST_USE_UNSTABLE_API
+dec_gstreamer_cflags	+= $(GST_VAAPI_CFLAGS) $(GST_VIDEO_CFLAGS)
+dec_gstreamer_libs	+= $(GST_VAAPI_LIBS) $(GST_VIDEO_LIBS)
+
+if GST_VAAPI_BACKEND_DRM
+dec_gstreamer_cflags	+= $(GST_VAAPI_DRM_CFLAGS)
+dec_gstreamer_libs	+= $(GST_VAAPI_DRM_LIBS)
+endif
+
+if GST_VAAPI_BACKEND_X11
+dec_gstreamer_cflags	+= $(GST_VAAPI_X11_CFLAGS)
+dec_gstreamer_libs	+= $(GST_VAAPI_X11_LIBS)
+endif
+
+dec_gstreamer_SOURCES	= $(dec_gstreamer_source_c)
+dec_gstreamer_CFLAGS	= $(dec_gstreamer_cflags)
+dec_gstreamer_LDADD	= $(dec_gstreamer_libs)
+
 EXTRA_DIST = \
 	$(mvt_decoder_source_c)		\
 	$(mvt_decoder_source_h)		\
 	$(mvt_utils_source_h)		\
+	$(dec_gstreamer_source_c)	\
+	$(dec_gstreamer_source_h)	\
 	$(NULL)
 
 # Extra clean files so that maintainer-clean removes *everything*
