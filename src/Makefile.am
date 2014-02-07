@@ -19,23 +19,30 @@ mvt_utils_source_c = \
 	mvt_hash.c		\
 	mvt_hash_adler32.c	\
 	mvt_hash_md5.c		\
+	mvt_image.c		\
 	mvt_map.c		\
 	mvt_memory.c		\
 	mvt_messages.c		\
+	va_image_utils.c	\
 	va_utils.c		\
+	video_format.c		\
 	$(NULL)
 
 mvt_utils_source_h = \
 	mvt_display.h		\
 	mvt_hash.h		\
 	mvt_hash_priv.h		\
+	mvt_image.h		\
+	mvt_image_priv.h	\
 	mvt_macros.h		\
 	mvt_map.h		\
 	mvt_memory.h		\
 	mvt_messages.h		\
 	sysdeps.h		\
 	va_compat.h		\
+	va_image_utils.h	\
 	va_utils.h		\
+	video_format.h		\
 	$(NULL)
 
 if USE_VA_DRM
