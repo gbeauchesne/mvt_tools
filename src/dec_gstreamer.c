@@ -104,6 +104,7 @@ typedef struct {
 #if GST_CHECK_VERSION(1,1,0)
     GstContext         *context;
 #endif
+    MvtImage           *image;
     guint               gst_init_done : 1;
 } App;
 
@@ -167,6 +168,7 @@ app_finalize(App *app)
         g_source_remove(app->bus_watch_id);
     if (app->loop)
         g_main_loop_unref(app->loop);
+    mvt_image_freep(&app->image);
     gst_caps_replace(&app->vsink_caps, NULL);
     g_clear_error(&app->error);
 }
@@ -277,7 +279,7 @@ error_map_buffer:
 static gboolean
 app_handle_hw_surface_vaapi(App *app, GstBuffer *buffer)
 {
-    MvtImage src_image, *dst_image;
+    MvtImage src_image;
     GstVaapiSurfaceProxy *proxy;
     GstVaapiSurface *surface;
     GstMapInfo map_info;
@@ -308,8 +310,19 @@ app_handle_hw_surface_vaapi(App *app, GstBuffer *buffer)
     if (!va_map_image(va_display, &va_image, &src_image))
         goto error_unsupported_image;
 
-    dst_image = &src_image;
-    success = mvt_decoder_handle_image(&app->decoder, dst_image, 0);
+    if (!app->image || (app->image->width != src_image.width ||
+            app->image->height != src_image.height)) {
+        mvt_image_freep(&app->image);
+        app->image = mvt_image_new(VIDEO_FORMAT_I420,
+            src_image.width, src_image.height);
+        if (!app->image)
+            goto error_convert_image;
+    }
+    if (!mvt_image_convert_full(app->image, &src_image,
+            MVT_IMAGE_FLAG_FROM_USWC))
+        goto error_convert_image;
+
+    success = mvt_decoder_handle_image(&app->decoder, app->image, 0);
     va_unmap_image(va_display, &va_image, &src_image);
     gst_vaapi_object_unref(image);
     gst_buffer_unmap(buffer, &map_info);
@@ -329,6 +342,12 @@ error_invalid_surface:
     return FALSE;
 error_unsupported_image:
     app_error(app, "failed to extract raw VA image from buffer %p", buffer);
+    gst_vaapi_object_replace(&image, NULL);
+    gst_buffer_unmap(buffer, &map_info);
+    return FALSE;
+error_convert_image:
+    app_error(app, "failed to convert VA image to native image");
+    va_unmap_image(va_display, &va_image, &src_image);
     gst_vaapi_object_replace(&image, NULL);
     gst_buffer_unmap(buffer, &map_info);
     return FALSE;
