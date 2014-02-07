@@ -63,6 +63,7 @@ AM_PROG_CC_C_O
 AC_PROG_CXX
 
 AC_C_BIGENDIAN
+AC_CHECK_LIB([m], [log10])
 
 dnl Initialize libtool
 LT_PREREQ([2.2])
@@ -162,6 +163,7 @@ AC_CONFIG_FILES([
     Makefile
     ext/Makefile
     ext/files/Makefile
+    ext/libyuv/Makefile
     src/Makefile
 ])
 AC_OUTPUT

@@ -1,0 +1,3 @@
+[submodule "ext/libyuv/upstream"]
+	path = ext/libyuv/upstream
+	url = https://chromium.googlesource.com/external/libyuv

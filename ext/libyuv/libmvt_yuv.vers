@@ -1,0 +1,11 @@
+MVT_LIBYUV {
+global:
+    InitCpuFlags;
+    cpu_info_;
+    I420Copy;
+    I420ToNV12;
+    NV12ToI420;
+    I400ToI420;
+local:
+    *;
+};
