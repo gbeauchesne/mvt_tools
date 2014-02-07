@@ -17,6 +17,7 @@ mvt_utils_libs = \
 	$(NULL)
 
 mvt_utils_source_c = \
+	mvt_codec.c		\
 	mvt_display.c		\
 	mvt_hash.c		\
 	mvt_hash_adler32.c	\
@@ -27,12 +28,14 @@ mvt_utils_source_c = \
 	mvt_map.c		\
 	mvt_memory.c		\
 	mvt_messages.c		\
+	mvt_report.c		\
 	va_image_utils.c	\
 	va_utils.c		\
 	video_format.c		\
 	$(NULL)
 
 mvt_utils_source_h = \
+	mvt_codec.h		\
 	mvt_display.h		\
 	mvt_hash.h		\
 	mvt_hash_priv.h		\
@@ -42,6 +45,7 @@ mvt_utils_source_h = \
 	mvt_map.h		\
 	mvt_memory.h		\
 	mvt_messages.h		\
+	mvt_report.h		\
 	sysdeps.h		\
 	va_compat.h		\
 	va_image_utils.h	\
@@ -63,7 +67,12 @@ libmvt_utils_la_SOURCES	= $(mvt_utils_source_c)
 libmvt_utils_la_CFLAGS	= $(mvt_utils_cflags)
 libmvt_utils_la_LIBADD	= $(mvt_utils_libs)
 
+mvt_decoder_source_c = mvt_decoder.c
+mvt_decoder_source_h = mvt_decoder.h
+
 EXTRA_DIST = \
+	$(mvt_decoder_source_c)		\
+	$(mvt_decoder_source_h)		\
 	$(mvt_utils_source_h)		\
 	$(NULL)
 
