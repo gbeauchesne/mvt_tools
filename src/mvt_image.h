@@ -103,6 +103,14 @@ mvt_image_init_pixels(MvtImage *image);
 void
 mvt_image_clear(MvtImage *image);
 
+/** Converts images with the same size */
+bool
+mvt_image_convert(MvtImage *image, MvtImage *src_image);
+
+/** Converts images with the same size, while allowing interleaving */
+bool
+mvt_image_convert_full(MvtImage *image, MvtImage *src_image, uint32_t flags);
+
 /** Computes the checksum from the supplied MvtImage object and hash function */
 bool
 mvt_image_hash(MvtImage *image, MvtHash *hash);

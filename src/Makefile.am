@@ -8,10 +8,12 @@ pkglibexec_PROGRAMS =
 
 mvt_utils_cflags = \
 	$(LIBVA_CFLAGS)		\
+	-I$(top_srcdir)/ext/libyuv/upstream/include \
 	$(NULL)
 
 mvt_utils_libs = \
 	$(LIBVA_LIBS)		\
+	$(top_builddir)/ext/libyuv/libmvt_yuv.la \
 	$(NULL)
 
 mvt_utils_source_c = \
@@ -20,6 +22,7 @@ mvt_utils_source_c = \
 	mvt_hash_adler32.c	\
 	mvt_hash_md5.c		\
 	mvt_image.c		\
+	mvt_image_convert.c	\
 	mvt_image_hash.c	\
 	mvt_map.c		\
 	mvt_memory.c		\
