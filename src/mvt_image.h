@@ -25,6 +25,7 @@
 
 #include <va/va.h>
 #include "video_format.h"
+#include "mvt_hash.h"
 
 MVT_BEGIN_DECLS
 
@@ -101,6 +102,10 @@ mvt_image_init_pixels(MvtImage *image);
 /** Clears MvtImage object, thus deallocating any possible data from it */
 void
 mvt_image_clear(MvtImage *image);
+
+/** Computes the checksum from the supplied MvtImage object and hash function */
+bool
+mvt_image_hash(MvtImage *image, MvtHash *hash);
 
 MVT_END_DECLS
 

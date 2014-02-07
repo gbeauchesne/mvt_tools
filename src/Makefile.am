@@ -20,6 +20,7 @@ mvt_utils_source_c = \
 	mvt_hash_adler32.c	\
 	mvt_hash_md5.c		\
 	mvt_image.c		\
+	mvt_image_hash.c	\
 	mvt_map.c		\
 	mvt_memory.c		\
 	mvt_messages.c		\
