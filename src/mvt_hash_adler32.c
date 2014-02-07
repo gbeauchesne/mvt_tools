@@ -29,13 +29,16 @@ typedef struct {
     uint32_t    value;
 } MvtHashAdler32;
 
+/* Initial Adler-32 value. Normally 1 */
+#define ADLER32_INIT 0
+
 /* Largest prime number that is smaller than 65536 */
 #define ADLER32_BASE 65521
 
 static bool
 adler32_init(MvtHashAdler32 *hash)
 {
-    hash->value = 0;
+    hash->value = ADLER32_INIT;
     return true;
 }
 
@@ -50,18 +53,27 @@ adler32_finalize(MvtHashAdler32 *hash)
     hash->base.value[3] = value;
 }
 
+#define ADLER32_UNPACK(h, s1, s2) \
+    s1 = ((h)->value & 0xffff), s2 = ((h)->value >> 16)
+
+#define ADLER32_PACK(h, s1, s2) \
+    (h)->value = (((s2) << 16) | (s1))
+
+#define DO1(buf, i)     do { s1 += buf[i]; s2 += s1; } while (0)
+
+/* Original algorithm (naive C version) */
 static void
 adler32_update(MvtHashAdler32 *hash, const uint8_t *buf, uint32_t len)
 {
-    uint32_t s1 = hash->value & 0xffff;
-    uint32_t s2 = hash->value >> 16;
-    uint32_t i;
+    uint32_t i, s1, s2;
 
+    ADLER32_UNPACK(hash, s1, s2);
     for (i = 0; i < len; i++) {
-        s1 = (s1 + buf[i]) % ADLER32_BASE;
-        s2 = (s2 + s1) % ADLER32_BASE;
+        DO1(buf, i);
+        s1 %= ADLER32_BASE;
+        s2 %= ADLER32_BASE;
     }
-    hash->value = (s2 << 16) | s1;
+    ADLER32_PACK(hash, s1, s2);
 }
 
 const MvtHashClass *
