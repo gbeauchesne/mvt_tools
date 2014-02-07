@@ -16,6 +16,9 @@ mvt_utils_libs = \
 
 mvt_utils_source_c = \
 	mvt_display.c		\
+	mvt_hash.c		\
+	mvt_hash_adler32.c	\
+	mvt_hash_md5.c		\
 	mvt_map.c		\
 	mvt_memory.c		\
 	mvt_messages.c		\
@@ -24,6 +27,8 @@ mvt_utils_source_c = \
 
 mvt_utils_source_h = \
 	mvt_display.h		\
+	mvt_hash.h		\
+	mvt_hash_priv.h		\
 	mvt_macros.h		\
 	mvt_map.h		\
 	mvt_memory.h		\
