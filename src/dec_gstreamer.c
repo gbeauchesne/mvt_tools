@@ -273,6 +273,67 @@ error_map_buffer:
     return FALSE;
 }
 
+// Handle HW surfaces (VA-API)
+static gboolean
+app_handle_hw_surface_vaapi(App *app, GstBuffer *buffer)
+{
+    MvtImage src_image, *dst_image;
+    GstVaapiSurfaceProxy *proxy;
+    GstVaapiSurface *surface;
+    GstMapInfo map_info;
+    GstVaapiImage *image;
+    VAImage va_image;
+    VADisplay va_display;
+    gboolean success;
+
+    if (!gst_buffer_map(buffer, &map_info, 0))
+        goto error_map_buffer;
+
+    proxy = (GstVaapiSurfaceProxy *)map_info.data;
+    if (!proxy)
+        goto error_invalid_proxy;
+
+    surface = gst_vaapi_surface_proxy_get_surface(proxy);
+    if (!surface)
+        goto error_invalid_surface;
+
+    va_display = gst_vaapi_display_get_display(
+        GST_VAAPI_OBJECT_DISPLAY(surface));
+
+    image = gst_vaapi_surface_derive_image(surface);
+    if (!image || !gst_vaapi_image_get_image(image, &va_image))
+        goto error_unsupported_image;
+    if (!mvt_image_init_from_va_image(&src_image, &va_image))
+        goto error_unsupported_image;
+    if (!va_map_image(va_display, &va_image, &src_image))
+        goto error_unsupported_image;
+
+    dst_image = &src_image;
+    success = mvt_decoder_handle_image(&app->decoder, dst_image, 0);
+    va_unmap_image(va_display, &va_image, &src_image);
+    gst_vaapi_object_unref(image);
+    gst_buffer_unmap(buffer, &map_info);
+    return success;
+
+    /* ERRORS */
+error_map_buffer:
+    app_error(app, "failed to map buffer %p", buffer);
+    return FALSE;
+error_invalid_proxy:
+    app_error(app, "failed to extract VA surface proxy from buffer %p", buffer);
+    gst_buffer_unmap(buffer, &map_info);
+    return FALSE;
+error_invalid_surface:
+    app_error(app, "failed to extract VA surface from buffer %p", buffer);
+    gst_buffer_unmap(buffer, &map_info);
+    return FALSE;
+error_unsupported_image:
+    app_error(app, "failed to extract raw VA image from buffer %p", buffer);
+    gst_vaapi_object_replace(&image, NULL);
+    gst_buffer_unmap(buffer, &map_info);
+    return FALSE;
+}
+
 typedef enum {
     GST_AUTOPLUG_SELECT_TRY,
     GST_AUTOPLUG_SELECT_EXPOSE,
@@ -284,6 +345,17 @@ on_autoplug_select(GstElement *element, GstPad *pad, GstCaps *caps,
     GstElementFactory *factory, App *app)
 {
     const MvtDecoderOptions * const options = &app->decoder.options;
+    const gchar *element_name;
+
+    /* Determine the name of the element this factory refers to */
+    if (GST_IS_PLUGIN_FEATURE(factory))
+        element_name = gst_plugin_feature_get_name(factory);
+    else if (GST_IS_OBJECT(factory))
+        element_name = GST_OBJECT_NAME(factory);
+    else {
+        GST_ERROR("failed to determine element name");
+        return GST_AUTOPLUG_SELECT_SKIP;
+    }
 
     /* Filter out factories that are not "media-video" + "decoder" */
     if (!gst_element_factory_list_is_type(factory,
@@ -294,6 +366,11 @@ on_autoplug_select(GstElement *element, GstPad *pad, GstCaps *caps,
     if (!gst_element_factory_list_is_type(factory,
             GST_ELEMENT_FACTORY_TYPE_DECODER))
         return GST_AUTOPLUG_SELECT_TRY;
+
+    /* Filter out/in hardware accelerated decoders when needed */
+    if (!strncmp(element_name, "vaapi", 5))
+        return options->hwaccel == MVT_HWACCEL_VAAPI ?
+            GST_AUTOPLUG_SELECT_TRY : GST_AUTOPLUG_SELECT_SKIP;
 
     /* Try whatever is left */
     return options->hwaccel == MVT_HWACCEL_NONE ?
@@ -331,6 +408,10 @@ on_handoff(GstElement *element, GstBuffer *buffer, GstPad *pad, App *app)
     switch (options->hwaccel) {
     case MVT_HWACCEL_NONE:
         if (!app_handle_sw_surface(app, buffer))
+            return FALSE;
+        break;
+    case MVT_HWACCEL_VAAPI:
+        if (!app_handle_hw_surface_vaapi(app, buffer))
             return FALSE;
         break;
     }
