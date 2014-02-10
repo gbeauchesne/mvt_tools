@@ -52,6 +52,11 @@ typedef struct {
     MvtImagePrivate *   priv;           ///< Private image data
 } MvtImage;
 
+enum {
+    /** Image is in Uncacheable Speculative Write Combining (USWC) memory */
+    MVT_IMAGE_FLAG_FROM_USWC = 1 << 31,
+};
+
 /** Creates a new MvtImage object and allocates data for it */
 MvtImage *
 mvt_image_new(VideoFormat format, uint32_t width, uint32_t height);

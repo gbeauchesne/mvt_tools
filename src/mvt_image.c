@@ -47,6 +47,7 @@ mvt_image_priv_clear(MvtImage *image)
         return;
 
     priv = image->priv;
+    mem_freep(&priv->copy_cache);
     mem_freep(&priv->data_base);
     mem_freep(&image->priv);
 }
