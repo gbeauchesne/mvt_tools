@@ -25,6 +25,9 @@
 #include "mvt_image_priv.h"
 #include "mvt_memory.h"
 
+// Define the image data alignment so that to possibly enable SIMD optimizations
+#define MVT_IMAGE_DATA_ALIGN (32)
+
 // Ensures private image data is allocated
 MvtImagePrivate *
 mvt_image_priv_ensure(MvtImage *image)
@@ -76,7 +79,8 @@ mvt_image_new(VideoFormat format, uint32_t width, uint32_t height)
     if (!mvt_image_priv_ensure(image))
         goto error;
 
-    image->priv->data_base = malloc(image->data_size);
+    image->priv->data_base = mem_alloc_aligned(image->data_size,
+        MVT_IMAGE_DATA_ALIGN);
     if (!image->priv->data_base)
         goto error;
 
@@ -129,13 +133,13 @@ mvt_image_init(MvtImage *image, VideoFormat format, uint32_t width,
     memset(image, 0, sizeof(*image));
     image->num_planes = vip->num_planes;
 
-    awidth  = round_up(width, 16);
-    aheight = round_up(height, 16);
+    awidth  = round_up(width, MVT_IMAGE_DATA_ALIGN);
+    aheight = round_up(height, MVT_IMAGE_DATA_ALIGN);
     for (i = 0; i < vip->num_components; i++) {
         const VideoFormatComponentInfo * const cip = &vip->components[i];
 
-        const uint32_t pitch = (cip->pixel_stride * awidth) >>
-            (i > 0 ? vip->chroma_w_shift : 0);
+        const uint32_t pitch = round_up(((cip->pixel_stride * awidth) >>
+            (i > 0 ? vip->chroma_w_shift : 0)), MVT_IMAGE_DATA_ALIGN);
         if (image->pitches[cip->plane] && image->pitches[cip->plane] != pitch)
             return false;
         image->pitches[cip->plane] = pitch;
