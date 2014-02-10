@@ -201,11 +201,12 @@ error_invalid_caps:
 
 // Handle SW surfaces
 static gboolean
-app_handle_sw_surface(App *app, GstBuffer *buffer)
+app_handle_sw_surface(App *app, GstBuffer *buffer,
+    const VARectangle *crop_rect)
 {
     GstVideoFrame frame;
     VideoFormat format;
-    MvtImage src_image;
+    MvtImage src_image, dst_image;
     VAImage va_image;
     const VAImageFormat *va_format;
     uint32_t i;
@@ -256,7 +257,11 @@ app_handle_sw_surface(App *app, GstBuffer *buffer)
     for (i = 0; i < src_image.num_planes; i++)
         src_image.pixels[i] = frame.data[i];
 
-    success = mvt_decoder_handle_image(&app->decoder, &src_image, 0);
+    if (!mvt_image_init_from_subimage(&dst_image, &src_image, crop_rect))
+        goto error_crop_image;
+
+    success = mvt_decoder_handle_image(&app->decoder, &dst_image, 0);
+    mvt_image_clear(&dst_image);
     mvt_image_clear(&src_image);
     gst_video_frame_unmap(&frame);
     return success;
@@ -273,13 +278,19 @@ error_map_buffer:
     app_error(app, "failed to map buffer %p", buffer);
     mvt_image_clear(&src_image);
     return FALSE;
+error_crop_image:
+    app_error(app, "failed to extract cropped image from buffer %p", buffer);
+    mvt_image_clear(&src_image);
+    gst_video_frame_unmap(&frame);
+    return FALSE;
 }
 
 // Handle HW surfaces (VA-API)
 static gboolean
-app_handle_hw_surface_vaapi(App *app, GstBuffer *buffer)
+app_handle_hw_surface_vaapi(App *app, GstBuffer *buffer,
+    const VARectangle *crop_rect)
 {
-    MvtImage src_image;
+    MvtImage src_image, dst_image;
     GstVaapiSurfaceProxy *proxy;
     GstVaapiSurface *surface;
     GstMapInfo map_info;
@@ -310,19 +321,23 @@ app_handle_hw_surface_vaapi(App *app, GstBuffer *buffer)
     if (!va_map_image(va_display, &va_image, &src_image))
         goto error_unsupported_image;
 
-    if (!app->image || (app->image->width != src_image.width ||
-            app->image->height != src_image.height)) {
+    if (!mvt_image_init_from_subimage(&dst_image, &src_image, crop_rect))
+        goto error_crop_image;
+
+    if (!app->image || (app->image->width != dst_image.width ||
+            app->image->height != dst_image.height)) {
         mvt_image_freep(&app->image);
         app->image = mvt_image_new(VIDEO_FORMAT_I420,
-            src_image.width, src_image.height);
+            dst_image.width, dst_image.height);
         if (!app->image)
             goto error_convert_image;
     }
-    if (!mvt_image_convert_full(app->image, &src_image,
+    if (!mvt_image_convert_full(app->image, &dst_image,
             MVT_IMAGE_FLAG_FROM_USWC))
         goto error_convert_image;
 
     success = mvt_decoder_handle_image(&app->decoder, app->image, 0);
+    mvt_image_clear(&dst_image);
     va_unmap_image(va_display, &va_image, &src_image);
     gst_vaapi_object_unref(image);
     gst_buffer_unmap(buffer, &map_info);
@@ -345,8 +360,15 @@ error_unsupported_image:
     gst_vaapi_object_replace(&image, NULL);
     gst_buffer_unmap(buffer, &map_info);
     return FALSE;
+error_crop_image:
+    app_error(app, "failed to extract cropped image from buffer %p", buffer);
+    va_unmap_image(va_display, &va_image, &src_image);
+    gst_vaapi_object_replace(&image, NULL);
+    gst_buffer_unmap(buffer, &map_info);
+    return FALSE;
 error_convert_image:
     app_error(app, "failed to convert VA image to native image");
+    mvt_image_clear(&dst_image);
     va_unmap_image(va_display, &va_image, &src_image);
     gst_vaapi_object_replace(&image, NULL);
     gst_buffer_unmap(buffer, &map_info);
@@ -413,8 +435,22 @@ static gboolean
 on_handoff(GstElement *element, GstBuffer *buffer, GstPad *pad, App *app)
 {
     const MvtDecoderOptions * const options = &app->decoder.options;
+    VARectangle tmp_crop_rect, *crop_rect = NULL;
     GstCaps *caps;
     gboolean caps_changed;
+
+    /* Update video crop info */
+#if GST_CHECK_VERSION(1,0,0)
+    GstVideoCropMeta * const crop_meta =
+        gst_buffer_get_video_crop_meta(buffer);
+    if (crop_meta) {
+        crop_rect = &tmp_crop_rect;
+        crop_rect->x = crop_meta->x;
+        crop_rect->y = crop_meta->y;
+        crop_rect->width = crop_meta->width;
+        crop_rect->height = crop_meta->height;
+    }
+#endif
 
     /* Update the video caps */
     caps = gst_pad_get_current_caps(pad);
@@ -429,11 +465,11 @@ on_handoff(GstElement *element, GstBuffer *buffer, GstPad *pad, App *app)
     /* Handle the decoded buffer */
     switch (options->hwaccel) {
     case MVT_HWACCEL_NONE:
-        if (!app_handle_sw_surface(app, buffer))
+        if (!app_handle_sw_surface(app, buffer, crop_rect))
             return FALSE;
         break;
     case MVT_HWACCEL_VAAPI:
-        if (!app_handle_hw_surface_vaapi(app, buffer))
+        if (!app_handle_hw_surface_vaapi(app, buffer, crop_rect))
             return FALSE;
         break;
     }
