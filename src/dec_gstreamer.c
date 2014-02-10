@@ -358,6 +358,9 @@ on_autoplug_select(GstElement *element, GstPad *pad, GstCaps *caps,
     }
 
     /* Filter out factories that are not "media-video" + "decoder" */
+    if (gst_element_factory_list_is_type(factory,
+            GST_ELEMENT_FACTORY_TYPE_MEDIA_AUDIO))
+        return GST_AUTOPLUG_SELECT_SKIP;
     if (!gst_element_factory_list_is_type(factory,
             GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO) &&
         !gst_element_factory_list_is_type(factory,
