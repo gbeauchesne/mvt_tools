@@ -11,7 +11,13 @@ m4_append([mvt_version], mvt_pre_version, [.pre])
 
 # Configure defaults
 m4_define([default_renderer],           [drm])
+m4_define([default_ffmpeg],             [yes])
 m4_define([default_gstreamer],          [yes])
+
+# FFmpeg version number
+m4_define([libavutil_version],          [51.22.1])
+m4_define([libavformat_version],        [53.21.1])
+m4_define([libavcodec_version],         [53.35.0])
 
 # glib version number
 m4_define([glib_version],               [2.28])
@@ -63,6 +69,10 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])], [
 ])
 
 dnl Configure options
+AC_ARG_ENABLE([ffmpeg],
+    AS_HELP_STRING([--enable-ffmpeg],
+                   [build FFmpeg module @<:@default=default_ffmpeg@:>@]),
+    [], [enable_ffmpeg=default_ffmpeg])
 AC_ARG_ENABLE([gstreamer],
     AS_HELP_STRING([--enable-gstreamer],
                    [build GStreamer module @<:@default=default_gstreamer@:>@]),
@@ -183,6 +193,43 @@ AC_DEFINE_UNQUOTED([USE_VA_X11], [$USE_VA_X11],
 AM_CONDITIONAL([USE_VA_X11], [test $USE_VA_X11 -eq 1])
 
 dnl ---------------------------------------------------------------------------
+dnl -- FFmpeg                                                                --
+dnl ---------------------------------------------------------------------------
+
+dnl Check for libavutil
+if test "$enable_ffmpeg" = "yes"; then
+    PKG_CHECK_MODULES([LIBAVUTIL], [libavutil >= libavutil_version])
+
+    saved_CPPFLAGS="$CPPFLAGS"
+    CPPFLAGS="$CPPFLAGS $LIBAVUTIL_CFLAGS"
+    AC_CHECK_HEADERS([libavutil/pixfmt.h libavutil/pixdesc.h],
+        [], [AC_MSG_ERROR([incomplete libavutil-dev (headers) package])])
+    CPPFLAGS="$saved_CPPFLAGS"
+fi
+
+dnl Check for libavformat
+if test "$enable_ffmpeg" = "yes"; then
+    PKG_CHECK_MODULES([LIBAVFORMAT], [libavformat >= libavformat_version])
+
+    saved_CPPFLAGS="$CPPFLAGS"
+    CPPFLAGS="$CPPFLAGS $LIBAVFORMAT_CFLAGS"
+    AC_CHECK_HEADERS([libavformat/avformat.h],
+        [], [AC_MSG_ERROR([incomplete libavformat-dev (headers) package])])
+    CPPFLAGS="$saved_CPPFLAGS"
+fi
+
+dnl Check for libavcodec
+if test "$enable_ffmpeg" = "yes"; then
+    PKG_CHECK_MODULES([LIBAVCODEC], [libavcodec >= libavcodec_version])
+
+    saved_CPPFLAGS="$CPPFLAGS"
+    CPPFLAGS="$CPPFLAGS $LIBAVCODEC_CFLAGS"
+    AC_CHECK_HEADERS([libavcodec/avcodec.h],
+        [], [AC_MSG_ERROR([incomplete libavcodec-dev (headers) package])])
+    CPPFLAGS="$saved_CPPFLAGS"
+fi
+
+dnl ---------------------------------------------------------------------------
 dnl -- GStreamer                                                             --
 dnl ---------------------------------------------------------------------------
 
@@ -264,6 +311,7 @@ dnl -- Generate files and summary                                            --
 dnl ---------------------------------------------------------------------------
 
 AM_CONDITIONAL([ENABLE_GSTREAMER],      [test "$enable_gstreamer" = "yes"])
+AM_CONDITIONAL([ENABLE_FFMPEG],         [test "$enable_ffmpeg" = "yes"])
 
 AC_DEFINE_UNQUOTED([GST_VAAPI_BACKEND_DRM], [$USE_GST_VAAPI_BACKEND_DRM],
     [Defined to 1 if gstreamer-vaapi (DRM) backend is enabled])
@@ -288,6 +336,7 @@ echo $PACKAGE configuration summary:
 echo
 echo Renderer ......................... : $MVT_RENDERER_NAME
 echo VA-API version ................... : $VA_VERSION_STR
+echo Enable FFmpeg .................... : $enable_ffmpeg
 echo Enable GStreamer ................. : $enable_gstreamer
 if test "$enable_gstreamer" = "yes"; then
 echo GStreamer API version ............ : $GST_API_VERSION

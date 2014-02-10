@@ -23,6 +23,7 @@ environments.
 Features
 --------
 
+  * FFmpeg decoders
   * GStreamer decoders, including VA-API support
 
 

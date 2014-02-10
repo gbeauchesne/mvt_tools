@@ -1,6 +1,14 @@
 lib_LTLIBRARIES = libmvt_utils.la
 
+noinst_LTLIBRARIES =
+if ENABLE_FFMPEG
+noinst_LTLIBRARIES += libdec_ffmpeg.la
+endif
+
 pkglibexec_PROGRAMS =
+if ENABLE_FFMPEG
+pkglibexec_PROGRAMS += dec_ffmpeg
+endif
 if ENABLE_GSTREAMER
 pkglibexec_PROGRAMS += dec_gstreamer
 endif
@@ -74,6 +82,46 @@ mvt_decoder_source_c = mvt_decoder.c
 mvt_decoder_source_h = mvt_decoder.h
 
 # -----------------------------------------------------------------------------
+# --- FFmpeg decoder module                                                 ---
+# -----------------------------------------------------------------------------
+
+FFMPEG_CFLAGS	= $(LIBAVUTIL_CFLAGS) $(LIBAVFORMAT_CFLAGS) $(LIBAVCODEC_CFLAGS)
+FFMPEG_LIBS	= $(LIBAVUTIL_LIBS) $(LIBAVFORMAT_LIBS) $(LIBAVCODEC_LIBS)
+
+libdec_ffmpeg_cflags = \
+	$(mvt_utils_cflags)	\
+	$(FFMPEG_CFLAGS)	\
+	$(NULL)
+
+libdec_ffmpeg_libs = \
+	libmvt_utils.la		\
+	$(mvt_utils_libs)	\
+	$(FFMPEG_LIBS)		\
+	$(NULL)
+
+libdec_ffmpeg_source_c = \
+	$(mvt_decoder_source_c)	\
+	ffmpeg_utils.c		\
+	mvt_decoder_ffmpeg.c	\
+	$(NULL)
+
+libdec_ffmpeg_source_h = \
+	$(mvt_decoder_source_h)	\
+	ffmpeg_compat.h		\
+	ffmpeg_utils.h		\
+	mvt_decoder_ffmpeg.h	\
+	$(NULL)
+
+libdec_ffmpeg_la_SOURCES	= $(libdec_ffmpeg_source_c)
+libdec_ffmpeg_la_CFLAGS		= $(libdec_ffmpeg_cflags)
+libdec_ffmpeg_la_LIBADD		= $(libdec_ffmpeg_libs)
+
+dec_ffmpeg_source_c		= dec_ffmpeg.c
+dec_ffmpeg_SOURCES		= $(dec_ffmpeg_source_c)
+dec_ffmpeg_CFLAGS		= $(libdec_ffmpeg_cflags)
+dec_ffmpeg_LDADD		= libdec_ffmpeg.la
+
+# -----------------------------------------------------------------------------
 # --- GStreamer decoder module                                              ---
 # -----------------------------------------------------------------------------
 
@@ -119,6 +167,10 @@ EXTRA_DIST = \
 	$(mvt_decoder_source_c)		\
 	$(mvt_decoder_source_h)		\
 	$(mvt_utils_source_h)		\
+	$(libdec_ffmpeg_source_c)	\
+	$(libdec_ffmpeg_source_h)	\
+	$(dec_ffmpeg_source_c)		\
+	$(dec_ffmpeg_source_h)		\
 	$(dec_gstreamer_source_c)	\
 	$(dec_gstreamer_source_h)	\
 	$(NULL)
