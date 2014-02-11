@@ -66,6 +66,7 @@ static void
 mvt_decoder_options_clear(MvtDecoderOptions *options)
 {
     free(options->filename);
+    free(options->config_filename);
     free(options->report_filename);
     memset(options, 0, sizeof(*options));
 }
@@ -92,6 +93,8 @@ print_help(const char *prog)
            "    --hwaccel=API", mvt_hwaccel_to_name(DEFAULT_HWACCEL));
     printf("  %-28s  define the report filename (default: stdout)\n",
            "-r, --report=PATH");
+    printf("  %-28s  define the config filename (default: stdout)\n",
+           "    --gen-config[=PATH]");
 
     exit(EXIT_FAILURE);
 }
@@ -139,6 +142,7 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
     enum {
         OPT_HWACCEL = 1000,
         OPT_VAAPI,
+        OPT_GEN_CONF,
     };
 
     static const struct option long_options[] = {
@@ -147,6 +151,7 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
         { "hwaccel",    required_argument,  NULL, OPT_HWACCEL   },
         { "vaapi",      no_argument,        NULL, OPT_VAAPI     },
         { "report",     required_argument,  NULL, 'r'           },
+        { "gen-config", optional_argument,  NULL, OPT_GEN_CONF  },
         { NULL, }
     };
 
@@ -171,6 +176,10 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
             break;
         case OPT_VAAPI:
             options->hwaccel = MVT_HWACCEL_VAAPI;
+            break;
+        case OPT_GEN_CONF:
+            free(options->config_filename);
+            options->config_filename = strdup(optarg ? optarg : "-");
             break;
         case '\1':
             free(options->filename);
@@ -244,10 +253,77 @@ mvt_decoder_run(MvtDecoder *decoder)
 bool
 mvt_decoder_handle_image(MvtDecoder *decoder, MvtImage *image, uint32_t flags)
 {
+    if (decoder->max_width < image->width)
+        decoder->max_width = image->width;
+    if (decoder->max_height < image->height)
+        decoder->max_height = image->height;
+
     if (!mvt_image_hash(image, decoder->hash))
         return false;
     mvt_report_write_image_hash(decoder->report, image, decoder->hash);
     return true;
+}
+
+// Dumps test config
+static bool
+mvt_decoder_dump_config(MvtDecoder *decoder)
+{
+    const MvtDecoderOptions * const options = &decoder->options;
+    FILE *out;
+    const char *str;
+    const uint8_t *value;
+    uint32_t i, value_length;
+    MvtHash *hash;
+    bool success = true;
+
+    if (!options->config_filename)
+        return true;
+
+    out = options->config_filename[0] == '-' ? stdout :
+        fopen(options->config_filename, "w");
+    if (!out) {
+        mvt_error("failed to create config file `%s'",
+            out != stdout ? "<stdout>" : options->filename);
+        goto cleanup;
+    }
+
+    fprintf(out, "#!/bin/sh\n");
+    fprintf(out, "# This file is part of the Media Validation Tools (MVT)\n");
+    fprintf(out, "FILE='%s'\n", get_basename(options->filename));
+
+    hash = mvt_hash_file(MVT_HASH_TYPE_MD5, options->filename);
+    if (!hash) {
+        mvt_error("failed to compute hash of file `%s'", options->filename);
+        goto cleanup;
+    }
+    mvt_hash_get_value(hash, &value, &value_length);
+    fprintf(out, "FILE_HASH='");
+    for (i = 0; i < value_length; i++)
+        fprintf(out, "%02x", value[i]);
+    fprintf(out, "'\n");
+    mvt_hash_freep(&hash);
+    fprintf(out, "\n");
+
+    if (!decoder->codec || !(str = mvt_codec_to_name(decoder->codec))) {
+        mvt_error("invalid codec (%d)", decoder->codec);
+        goto cleanup;
+    }
+    fprintf(out, "CODEC='%s'\n", str);
+
+    if (decoder->profile != -1) {
+        str = mvt_profile_to_name(decoder->codec, decoder->profile);
+        if (str)
+            fprintf(out, "CODEC_PROFILE='%s'\n", str);
+    }
+    fprintf(out, "CODEC_HASH='%s'\n", mvt_hash_type_to_name(options->hash_type));
+    fprintf(out, "CODEC_MAX_WIDTH=%u\n", decoder->max_width);
+    fprintf(out, "CODEC_MAX_HEIGHT=%u\n", decoder->max_height);
+    success = true;
+
+cleanup:
+    if (out != stdout)
+        fclose(out);
+    return success;
 }
 
 int
@@ -259,7 +335,10 @@ main(int argc, char *argv[])
     decoder = mvt_decoder_new();
     if (!decoder || !mvt_decoder_init(decoder, argc, argv))
         goto cleanup;
-    success = mvt_decoder_run(decoder);
+    if (!mvt_decoder_run(decoder))
+        goto cleanup;
+    mvt_decoder_dump_config(decoder);
+    success = true;
 
 cleanup:
     if (decoder)

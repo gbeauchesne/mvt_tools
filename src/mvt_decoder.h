@@ -53,6 +53,7 @@ mvt_hwaccel_to_name(MvtHwaccel hwaccel);
 /** Decoder options passed on to the command line */
 typedef struct {
     char *filename;             ///< Input filename
+    char *config_filename;      ///< Filename of the generated test config
     char *report_filename;      ///< Report filename
     MvtHashType hash_type;      ///< Codec hash type to use
     MvtHwaccel hwaccel;         ///< Hardware acceleration mode
@@ -65,6 +66,8 @@ typedef struct {
     MvtReport *report;          ///< Report (per-frame test results)
     MvtCodec codec;             ///< Identified codec
     int profile;                ///< Identified profile
+    uint32_t max_width;         ///< Max decoded width in pixels
+    uint32_t max_height;        ///< Max decoded height in pixels
 } MvtDecoder;
 
 typedef bool (*MvtDecoderInitFunc)(MvtDecoder *decoder);
