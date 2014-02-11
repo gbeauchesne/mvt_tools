@@ -66,3 +66,117 @@ ffmpeg_to_mvt_video_format(enum AVPixelFormat pix_fmt, VideoFormat *format_ptr)
         *format_ptr = format;
     return true;
 }
+
+// Translates FFmpeg codec id to MVT codec
+bool
+ffmpeg_to_mvt_codec(enum AVCodecID codec_id, MvtCodec *codec_ptr)
+{
+    MvtCodec codec;
+
+#define DEFINE_CODEC(FFMPEG_CODEC, MVT_CODEC)           \
+    case MVT_GEN_CONCAT(AV_CODEC_ID_,FFMPEG_CODEC):     \
+        codec = MVT_GEN_CONCAT(MVT_CODEC_,MVT_CODEC);   \
+        break
+
+#define DEFINE_CODEC_I(CODEC) \
+    DEFINE_CODEC(CODEC, CODEC)
+
+    switch (codec_id) {
+        DEFINE_CODEC(MPEG1VIDEO, MPEG1);
+        DEFINE_CODEC(MPEG2VIDEO, MPEG2);
+        DEFINE_CODEC_I(MPEG4);
+        DEFINE_CODEC(MJPEG, JPEG);
+        DEFINE_CODEC_I(H263);
+        DEFINE_CODEC_I(H264);
+        DEFINE_CODEC(WMV3, VC1);
+        DEFINE_CODEC_I(VC1);
+        DEFINE_CODEC_I(VP8);
+#if FFMPEG_HAS_VP9_DECODER
+        DEFINE_CODEC_I(VP9);
+#endif
+#if FFMPEG_HAS_HEVC_DECODER
+        DEFINE_CODEC_I(HEVC);
+#endif
+    default:
+        return false;
+    }
+#undef DEFINE_CODEC_I
+#undef DEFINE_CODEC
+
+    if (codec_ptr)
+        *codec_ptr = codec;
+    return true;
+}
+
+// Translates FFmpeg profile id to MVT profile
+bool
+ffmpeg_to_mvt_profile(MvtCodec codec, int ff_profile, int *profile_ptr)
+{
+    int profile = -1;
+
+#define DEFINE_PROFILE(CODEC, FFMPEG_PROFILE, MVT_PROFILE)              \
+    case MVT_GEN_CONCAT4(FF_PROFILE_,CODEC,_,FFMPEG_PROFILE):           \
+        profile = MVT_GEN_CONCAT4(MVT_,CODEC,_PROFILE_,MVT_PROFILE);    \
+        break
+
+#define DEFINE_PROFILE_I(CODEC, PROFILE) \
+    DEFINE_PROFILE(CODEC, PROFILE, PROFILE)
+
+    switch (codec) {
+    case MVT_CODEC_MPEG2:
+        switch (ff_profile) {
+            DEFINE_PROFILE_I(MPEG2, SIMPLE);
+            DEFINE_PROFILE_I(MPEG2, MAIN);
+            DEFINE_PROFILE_I(MPEG2, SNR_SCALABLE);
+            DEFINE_PROFILE(MPEG2, SS, SPATIALLY_SCALABLE);
+            DEFINE_PROFILE_I(MPEG2, HIGH);
+        }
+        break;
+    case MVT_CODEC_MPEG4:
+        switch (ff_profile) {
+            DEFINE_PROFILE_I(MPEG4, SIMPLE);
+            DEFINE_PROFILE_I(MPEG4, MAIN);
+            DEFINE_PROFILE_I(MPEG4, ADVANCED_SIMPLE);
+        }
+        break;
+    case MVT_CODEC_H264:
+        switch (ff_profile) {
+            DEFINE_PROFILE_I(H264, BASELINE);
+            DEFINE_PROFILE_I(H264, CONSTRAINED_BASELINE);
+            DEFINE_PROFILE_I(H264, MAIN);
+            DEFINE_PROFILE_I(H264, EXTENDED);
+            DEFINE_PROFILE_I(H264, HIGH);
+            DEFINE_PROFILE(H264, HIGH_10, HIGH10);
+            DEFINE_PROFILE(H264, HIGH_10_INTRA, HIGH10_INTRA);
+            DEFINE_PROFILE_I(H264, HIGH_422);
+            DEFINE_PROFILE_I(H264, HIGH_422_INTRA);
+            DEFINE_PROFILE(H264, HIGH_444_PREDICTIVE, HIGH_444);
+            DEFINE_PROFILE_I(H264, HIGH_444_INTRA);
+        }
+        break;
+    case MVT_CODEC_VC1:
+        switch (ff_profile) {
+            DEFINE_PROFILE_I(VC1, SIMPLE);
+            DEFINE_PROFILE_I(VC1, MAIN);
+            DEFINE_PROFILE_I(VC1, ADVANCED);
+        }
+        break;
+#if FFMPEG_HAS_HEVC_DECODER
+    case MVT_CODEC_HEVC:
+        switch (ff_profile) {
+            DEFINE_PROFILE_I(HEVC, MAIN);
+            DEFINE_PROFILE(HEVC, MAIN_10, MAIN10);
+            DEFINE_PROFILE_I(HEVC, MAIN_STILL_PICTURE);
+        }
+        break;
+#endif
+    default:
+        break;
+    }
+#undef DEFINE_PROFILE_I
+#undef DEFINE_PROFILE
+
+    if (profile_ptr)
+        *profile_ptr = profile;
+    return profile != -1;
+}

@@ -25,6 +25,7 @@
 
 #include "video_format.h"
 #include "ffmpeg_compat.h"
+#include "mvt_codec.h"
 
 /** Returns a string representation of the supplied FFmpeg error id */
 const char *
@@ -33,5 +34,13 @@ ffmpeg_strerror(int errnum, char errbuf[BUFSIZ]);
 /** Translates FFmpeg pixel format to MVT video format */
 bool
 ffmpeg_to_mvt_video_format(enum AVPixelFormat pix_fmt, VideoFormat *format_ptr);
+
+/** Translates FFmpeg codec id to MVT codec */
+bool
+ffmpeg_to_mvt_codec(enum AVCodecID codec_id, MvtCodec *codec_ptr);
+
+/** Translates FFmpeg profile id to MVT profile */
+bool
+ffmpeg_to_mvt_profile(MvtCodec codec, int ff_profile, int *profile_ptr);
 
 #endif /* FFMPEG_UTILS_H */

@@ -41,6 +41,22 @@ init_context(MvtDecoderFFmpeg *dec, AVCodecContext *avctx)
 }
 
 static bool
+init_codec_info(MvtDecoderFFmpeg *dec)
+{
+    AVCodecContext * const avctx = dec->avctx;
+    MvtCodec codec;
+    int profile;
+
+    if (!ffmpeg_to_mvt_codec(avctx->codec_id, &codec))
+        return false;
+    dec->base.codec = codec;
+
+    if (ffmpeg_to_mvt_profile(codec, avctx->profile, &profile))
+        dec->base.profile = profile;
+    return true;
+}
+
+static bool
 decoder_init(MvtDecoderFFmpeg *dec)
 {
     const MvtDecoderFFmpegClass * klass = MVT_DECODER_FFMPEG_GET_CLASS(dec);
@@ -86,6 +102,8 @@ decoder_init(MvtDecoderFFmpeg *dec)
         goto error_no_codec;
     if (avcodec_open2(avctx, codec, NULL) < 0)
         goto error_open_codec;
+    if (!init_codec_info(dec))
+        goto error_unsupported_codec;
 
     dec->frame = avcodec_alloc_frame();
     if (!dec->frame)
@@ -109,6 +127,9 @@ error_no_codec:
     return false;
 error_open_codec:
     mvt_error("failed to open codec %d", avctx->codec_id);
+    return false;
+error_unsupported_codec:
+    mvt_error("failed to translate FFmpeg codec %d", avctx->codec_id);
     return false;
 error_alloc_frame:
     mvt_error("failed to allocate video frame");

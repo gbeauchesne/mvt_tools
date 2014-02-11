@@ -41,4 +41,44 @@ enum AVPixelFormat {
 };
 #endif
 
+/* Checks whether library knows about the VP9 decoder */
+#define FFMPEG_HAS_VP9_DECODER \
+    (LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(55,28,0))
+
+/* Checks whether library knows about the HEVC decoder */
+#define FFMPEG_HAS_HEVC_DECODER \
+    (LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(55,24,101))
+
+/* Codec ids */
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(54,25,0)
+enum AVCodecID {
+    AV_CODEC_ID_MPEG1VIDEO      = CODEC_ID_MPEG1VIDEO,
+    AV_CODEC_ID_MPEG2VIDEO      = CODEC_ID_MPEG2VIDEO,
+    AV_CODEC_ID_MPEG4           = CODEC_ID_MPEG4,
+    AV_CODEC_ID_MJPEG           = CODEC_ID_MJPEG,
+    AV_CODEC_ID_H263            = CODEC_ID_H263,
+    AV_CODEC_ID_H264            = CODEC_ID_H264,
+    AV_CODEC_ID_WMV3            = CODEC_ID_WMV3,
+    AV_CODEC_ID_VC1             = CODEC_ID_VC1,
+    AV_CODEC_ID_VP8             = CODEC_ID_VP8,
+#if FFMPEG_HAS_VP9_DECODER
+    AV_CODEC_ID_VP9             = CODEC_ID_VP9,
+#endif
+#if FFMPEG_HAS_HEVC_DECODER
+    AV_CODEC_ID_HEVC            = CODEC_ID_HEVC,
+#endif
+};
+#endif
+
+/* Profiles */
+#ifndef FF_PROFILE_HEVC_MAIN
+#define FF_PROFILE_HEVC_MAIN 1
+#endif
+#ifndef FF_PROFILE_HEVC_MAIN_10
+#define FF_PROFILE_HEVC_MAIN_10 2
+#endif
+#ifndef FF_PROFILE_HEVC_MAIN_STILL_PICTURE
+#define FF_PROFILE_HEVC_MAIN_STILL_PICTURE 3
+#endif
+
 #endif /* FFMPEG_COMPAT_H */
