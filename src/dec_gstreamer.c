@@ -78,6 +78,119 @@ winsys_create_display(const gchar *name)
 }
 
 /* ------------------------------------------------------------------------ */
+/* --- GStreamer utilities                                              --- */
+/* ------------------------------------------------------------------------ */
+
+typedef int (*ProfileFromNameFunc)(const gchar *name);
+typedef bool (*ProfileFromCodecDataFunc)(const uint8_t *buf, uint32_t buf_size,
+    int *profile_ptr);
+
+typedef struct {
+    const gchar *media_str;
+    const gchar *profile_str;
+    MvtCodec codec;
+    int profile;
+    ProfileFromNameFunc profile_from_name;
+    ProfileFromCodecDataFunc profile_from_codec_data;
+} CodecInfo;
+
+static const CodecInfo codec_info[] = {
+    { "video/mpeg, mpegversion=(int)2", NULL,
+      MVT_CODEC_MPEG2, MVT_MPEG2_PROFILE_SIMPLE,
+      .profile_from_name = (ProfileFromNameFunc)mvt_mpeg2_profile_from_name },
+    { "video/mpeg, mpegversion=(int)4", NULL,
+      MVT_CODEC_MPEG4, MVT_MPEG4_PROFILE_SIMPLE,
+      .profile_from_name = (ProfileFromNameFunc)mvt_mpeg4_profile_from_name },
+    { "video/x-divx, divxversion=(int)5", NULL,
+      MVT_CODEC_MPEG4, MVT_MPEG4_PROFILE_ADVANCED_SIMPLE, },
+    { "video/x-xvid", NULL,
+      MVT_CODEC_MPEG4, MVT_MPEG4_PROFILE_ADVANCED_SIMPLE, },
+    { "image/jpeg", NULL,
+      MVT_CODEC_JPEG, -1 },
+    { "video/x-h264", NULL,
+      MVT_CODEC_H264, MVT_H264_PROFILE_BASELINE,
+      .profile_from_name = (ProfileFromNameFunc)mvt_h264_profile_from_name,
+      .profile_from_codec_data = mvt_h264_profile_from_codec_data },
+    { "video/x-wmv, wmvversion=(int)3", NULL,
+      MVT_CODEC_VC1, MVT_VC1_PROFILE_SIMPLE,
+      .profile_from_name = (ProfileFromNameFunc)mvt_vc1_profile_from_name,
+      .profile_from_codec_data = mvt_wmv3_profile_from_codec_data },
+    { "video/x-wmv, wmvversion=(int)3, format=(string)WVC1", NULL,
+      MVT_CODEC_VC1, MVT_VC1_PROFILE_ADVANCED, },
+    { "video/x-vp8", NULL,
+      MVT_CODEC_VP8, -1, },
+    { "video/x-vp9", NULL,
+      MVT_CODEC_VP9, MVT_VP9_PROFILE_0, },
+    { "video/x-h265", NULL,
+      MVT_CODEC_HEVC, MVT_HEVC_PROFILE_MAIN,
+      .profile_from_name = (ProfileFromNameFunc)mvt_hevc_profile_from_name },
+    { NULL, }
+};
+
+// Determines the codec and profile ids from the GStreamer caps
+static gboolean
+parse_codec_caps(GstCaps *caps, MvtCodec *codec_ptr, int *profile_ptr)
+{
+    const CodecInfo *cip;
+    GstCaps *ref_caps;
+    GstStructure *structure;
+    const GValue *value;
+    guint8 codec_data[BUFSIZ];
+    gsize codec_data_size = 0;
+    const gchar *name;
+    gsize namelen;
+    gboolean compatible_caps;
+    MvtCodec codec = 0;
+    const gchar *profile_str;
+    int v, profile = -1;
+
+    if (!gst_caps_is_fixed(caps))
+        return FALSE;
+
+    structure = gst_caps_get_structure(caps, 0);
+    if (!structure)
+        return FALSE;
+
+    name = gst_structure_get_name(structure);
+    namelen = strlen(name);
+
+    profile_str = gst_structure_get_string(structure, "profile");
+
+    value = gst_structure_get_value(structure, "codec_data");
+    if (value && G_VALUE_TYPE(value) == GST_TYPE_BUFFER) {
+        GstBuffer * const buffer = gst_value_get_buffer(value);
+        if (buffer)
+            codec_data_size = gst_buffer_extract(buffer, 0,
+                codec_data, sizeof(codec_data));
+    }
+
+    for (cip = codec_info; cip->media_str != NULL; cip++) {
+        if (strncmp(name, cip->media_str, namelen) != 0)
+            continue;
+        ref_caps = gst_caps_from_string(cip->media_str);
+        if (!ref_caps)
+            continue;
+        compatible_caps = gst_caps_is_always_compatible(caps, ref_caps);
+        gst_caps_unref(ref_caps);
+        if (!compatible_caps)
+            continue;
+        codec = cip->codec;
+        profile = cip->profile;
+        if (profile_str && cip->profile_from_name)
+            profile = cip->profile_from_name(profile_str);
+        if (cip->profile_from_codec_data &&
+            cip->profile_from_codec_data(codec_data, codec_data_size, &v))
+            profile = v;
+    }
+
+    if (codec_ptr)
+        *codec_ptr = codec;
+    if (profile_ptr)
+        *profile_ptr = profile;
+    return codec != 0;
+}
+
+/* ------------------------------------------------------------------------ */
 /* --- GStreamer based decoder                                          --- */
 /* ------------------------------------------------------------------------ */
 
@@ -96,6 +209,7 @@ typedef struct {
     GstElement         *pipeline;
     GstElement         *source;
     GstElement         *decodebin;
+    GstElement         *vdecode;
     GstElement         *vsink;
     GstCaps            *vsink_caps;
     GstVideoInfo        vinfo;
@@ -196,6 +310,56 @@ app_update_video_info(App *app, GstCaps *caps)
     /* ERRORS */
 error_invalid_caps:
     mvt_error("invalid or unsupported caps received");
+    return FALSE;
+}
+
+// Update codec info
+static gboolean
+app_update_codec_info(App *app)
+{
+    MvtDecoder * const dec = &app->decoder;
+    GstPad *pad;
+    GstCaps *caps;
+    MvtCodec codec;
+    int profile;
+    gboolean success;
+
+    if (!app->vdecode)
+        return FALSE;
+
+    if (!GST_IS_VIDEO_DECODER(app->vdecode))
+        goto error_unsupported_decoder;
+
+    pad = GST_VIDEO_DECODER_SINK_PAD(app->vdecode);
+    if (!pad)
+        goto error_no_sinkpad;
+
+    caps = gst_pad_get_current_caps(pad);
+    if (!caps)
+        goto error_no_caps;
+
+    success = parse_codec_caps(caps, &codec, &profile);
+    gst_caps_unref(caps);
+    if (!success)
+        return FALSE;
+
+    if (codec != dec->codec)
+        dec->codec = codec;
+    if (profile != -1 && profile != dec->profile)
+        dec->profile = profile;
+    return TRUE;
+
+    /* ERRORS */
+error_unsupported_decoder:
+    app_error(app, "unsupported decoder %" GST_PTR_FORMAT, app->vdecode);
+    return FALSE;
+error_no_sinkpad:
+    app_error(app, "fatal: no sink pad found for %" GST_PTR_FORMAT,
+        app->vdecode);
+    return FALSE;
+error_no_caps:
+    app_error(app, "fatal: no sink pad caps found for %" GST_PTR_FORMAT,
+        app->vdecode);
     return FALSE;
 }
 
@@ -431,6 +595,24 @@ on_pad_added(GstElement *element, GstPad *pad, GstElement *vsink)
     gst_object_unref(sinkpad);
 }
 
+static void
+on_element_added(GstBin *bin, GstElement *element, App *app)
+{
+    GstElementFactory * const factory = gst_element_get_factory(element);
+
+    if (!gst_element_factory_list_is_type(factory,
+            GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO) &&
+        !gst_element_factory_list_is_type(factory,
+            GST_ELEMENT_FACTORY_TYPE_MEDIA_IMAGE))
+        return;
+    if (!gst_element_factory_list_is_type(factory,
+            GST_ELEMENT_FACTORY_TYPE_DECODER))
+        return;
+
+    gst_object_replace((GstObject **)&app->vdecode, (GstObject *)element);
+    gst_object_unref(element);
+}
+
 static gboolean
 on_handoff(GstElement *element, GstBuffer *buffer, GstPad *pad, App *app)
 {
@@ -459,6 +641,8 @@ on_handoff(GstElement *element, GstBuffer *buffer, GstPad *pad, App *app)
     gst_caps_unref(caps);
     if (caps_changed) {
         if (!app_update_video_info(app, app->vsink_caps))
+            return FALSE;
+        if (!app_update_codec_info(app))
             return FALSE;
     }
 
@@ -519,6 +703,8 @@ app_init_pipeline(App *app)
         return app_pipeline_error(app, "source to decodebin link");
     g_signal_connect(app->decodebin, "pad-added",
         G_CALLBACK(on_pad_added), app->vsink);
+    g_signal_connect(app->decodebin, "element-added",
+        G_CALLBACK(on_element_added), app);
     g_signal_connect(app->decodebin, "autoplug-select",
         G_CALLBACK(on_autoplug_select), app);
     g_signal_connect(app->vsink, "handoff",
