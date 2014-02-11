@@ -70,6 +70,10 @@ mvt_hash_update(MvtHash *hash, const uint8_t *buf, uint32_t len);
 void
 mvt_hash_get_value(MvtHash *hash, const uint8_t **value_ptr, uint32_t *len_ptr);
 
+/** Computes the hash of the supplied file */
+MvtHash *
+mvt_hash_file(MvtHashType type, const char *filename);
+
 MVT_END_DECLS
 
 #endif /* MVT_HASH_H */

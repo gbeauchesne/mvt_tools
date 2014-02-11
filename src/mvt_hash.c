@@ -113,6 +113,22 @@ mvt_hash_freep(MvtHash **hash_ptr)
     }
 }
 
+// Initializes hash from the supplied file
+bool
+mvt_hash_init_from_file(MvtHash *hash, FILE *fp)
+{
+    uint8_t buf[BUFSIZ];
+    size_t bytes_read;
+
+    mvt_hash_init(hash);
+    while ((bytes_read = fread(buf, 1, sizeof(buf), fp)) > 0)
+        mvt_hash_update(hash, buf, bytes_read);
+    mvt_hash_finalize(hash);
+    if (ferror(fp))
+        return false;
+    return true;
+}
+
 // Initializes or reset a hash context
 void
 mvt_hash_init(MvtHash *hash)
@@ -152,4 +168,28 @@ mvt_hash_get_value(MvtHash *hash, const uint8_t **value_ptr, uint32_t *len_ptr)
         *value_ptr = hash->value;
     if (len_ptr)
         *len_ptr = hash->klass->value_length;
+}
+
+// Computes the hash of the supplied file
+MvtHash *
+mvt_hash_file(MvtHashType type, const char *filename)
+{
+    MvtHash *hash;
+    FILE *fp = NULL;
+
+    hash = mvt_hash_new(type);
+    if (!hash)
+        return NULL;
+
+    fp = fopen(filename, "r");
+    if (!fp || !mvt_hash_init_from_file(hash, fp))
+        goto error;
+    fclose(fp);
+    return hash;
+
+error:
+    if (fp)
+        fclose(fp);
+    mvt_hash_free(hash);
+    return NULL;
 }
