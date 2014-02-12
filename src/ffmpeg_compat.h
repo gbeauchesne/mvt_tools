@@ -38,6 +38,7 @@ enum AVPixelFormat {
     AV_PIX_FMT_NV12             = PIX_FMT_NV12,
     AV_PIX_FMT_YUYV422          = PIX_FMT_YUYV422,
     AV_PIX_FMT_UYVY422          = PIX_FMT_UYVY422,
+    AV_PIX_FMT_VAAPI_VLD        = PIX_FMT_VAAPI_VLD,
 };
 #endif
 

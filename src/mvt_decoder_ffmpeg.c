@@ -154,6 +154,10 @@ decoder_finalize(MvtDecoderFFmpeg *dec)
 static bool
 handle_frame(MvtDecoderFFmpeg *dec, AVFrame *frame)
 {
+    const MvtDecoderFFmpegClass * klass = MVT_DECODER_FFMPEG_GET_CLASS(dec);
+
+    if (klass->handle_frame)
+        return klass->handle_frame(MVT_DECODER(dec), frame);
     return mvt_decoder_ffmpeg_handle_frame(dec, frame);
 }
 
