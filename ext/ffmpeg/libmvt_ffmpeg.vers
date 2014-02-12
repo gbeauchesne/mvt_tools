@@ -1,0 +1,6 @@
+MVT_FFMPEG {
+global:
+    av*;
+local:
+    *;
+};
