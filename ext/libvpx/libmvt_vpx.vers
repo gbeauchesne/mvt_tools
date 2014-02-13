@@ -1,0 +1,6 @@
+MVT_VPX {
+global:
+    vpx_*;
+local:
+    *;
+};

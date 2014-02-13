@@ -15,6 +15,7 @@ m4_define([default_ffmpeg],             [yes])
 m4_define([default_builtin_ffmpeg],     [no])
 m4_define([default_gstreamer],          [yes])
 m4_define([default_ref_libvpx],         [yes])
+m4_define([default_builtin_libvpx],     [no])
 
 # FFmpeg version number
 m4_define([libavutil_version],          [51.22.1])
@@ -91,6 +92,10 @@ AC_ARG_ENABLE([ref-libvpx],
     AS_HELP_STRING([--enable-ref-libvpx],
         [build reference libvpx decoders @<:@default=default_ref_libvpx@:>@]),
     [], [enable_ref_libvpx=default_ref_libvpx])
+AC_ARG_ENABLE([builtin-libvpx],
+    AS_HELP_STRING([--enable-builtin-libvpx],
+                   [build built-in Libvpx module @<:@default=default_builtin_libvpx@:>@]),
+    [], [enable_builtin_libvpx=default_builtin_libvpx])
 
 AC_ARG_WITH([renderer],
     AC_HELP_STRING([--with-renderer=API],
@@ -337,20 +342,28 @@ dnl ---------------------------------------------------------------------------
 dnl -- Reference Decoders
 dnl ---------------------------------------------------------------------------
 
+dnl Check for built-in FFmpeg
+if test "$enable_builtin_libvpx" = "yes"; then
+    enable_libvpx="yes"
+fi
+
 dnl Check for libvpx
 USE_LIBVPX=0
-if test "$enable_ref_libvpx" = "yes"; then
+if test "$enable_ref_libvpx:$enable_builtin_libvpx" = "yes:no"; then
     PKG_CHECK_MODULES([LIBVPX], [vpx >= libvpx_version], [],
         [AC_MSG_WARN([libvpx-dev package not found. Disabling]);
          enable_ref_libvpx="no"])
 fi
-if test "$enable_ref_libvpx" = "yes"; then
+if test "$enable_ref_libvpx:$enable_builtin_libvpx" = "yes:no"; then
     saved_CPPFLAGS="$CPPFLAGS"
     CPPFLAGS="$LIBVPX_CFLAGS"
     AC_CHECK_HEADERS([vpx/vpx_decoder.h], [USE_LIBVPX=1],
         [AC_MSG_WARN([incomplete libvpx-dev (headers) package. Disabling]);
          enable_ref_libvpx="no"])
     CPPFLAGS="$saved_CPPFLAGS"
+fi
+if test "$enable_ref_libvpx:$enable_builtin_libvpx" = "yes:yes"; then
+    USE_LIBVPX=1
 fi
 AC_DEFINE_UNQUOTED([USE_LIBVPX], [$USE_LIBVPX],
     [Defined to 1 if VPx (libvpx) reference decoder is enabled])
@@ -363,6 +376,7 @@ dnl ---------------------------------------------------------------------------
 AM_CONDITIONAL([ENABLE_GSTREAMER],      [test "$enable_gstreamer" = "yes"])
 AM_CONDITIONAL([ENABLE_FFMPEG],         [test "$enable_ffmpeg" = "yes"])
 AM_CONDITIONAL([ENABLE_BUILTIN_FFMPEG], [test "$enable_builtin_ffmpeg" = "yes"])
+AM_CONDITIONAL([ENABLE_BUILTIN_LIBVPX], [test "$enable_builtin_libvpx" = "yes"])
 
 AC_DEFINE_UNQUOTED([GST_VAAPI_BACKEND_DRM], [$USE_GST_VAAPI_BACKEND_DRM],
     [Defined to 1 if gstreamer-vaapi (DRM) backend is enabled])
@@ -377,6 +391,7 @@ AC_CONFIG_FILES([
     ext/Makefile
     ext/ffmpeg/Makefile
     ext/files/Makefile
+    ext/libvpx/Makefile
     ext/libyuv/Makefile
     src/Makefile
 ])

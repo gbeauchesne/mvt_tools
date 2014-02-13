@@ -1,4 +1,4 @@
-SUBDIRS = files libyuv ffmpeg
+SUBDIRS = files libyuv libvpx ffmpeg
 
 # Extra clean files so that maintainer-clean removes *everything*
 MAINTAINERCLEANFILES = Makefile.in

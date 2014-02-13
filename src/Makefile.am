@@ -175,8 +175,13 @@ dec_gstreamer_LDADD	= $(dec_gstreamer_libs)
 # --- Reference VPx decoder (libvpx)                                        ---
 # -----------------------------------------------------------------------------
 
+if ENABLE_BUILTIN_LIBVPX
+VPX_CFLAGS		= -I$(top_srcdir)/ext/libvpx/upstream
+VPX_LIBS		= $(top_builddir)/ext/libvpx/libmvt_vpx.la
+else
 VPX_CFLAGS		= $(LIBVPX_CFLAGS)
 VPX_LIBS		= $(LIBVPX_LIBS)
+endif
 
 gen_ref_vpx_source_c	= gen_ref_vpx.c
 gen_ref_vpx_SOURCES	= $(gen_ref_vpx_source_c)
