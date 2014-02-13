@@ -14,6 +14,7 @@ m4_define([default_renderer],           [drm])
 m4_define([default_ffmpeg],             [yes])
 m4_define([default_builtin_ffmpeg],     [no])
 m4_define([default_gstreamer],          [yes])
+m4_define([default_ref_libvpx],         [yes])
 
 # FFmpeg version number
 m4_define([libavutil_version],          [51.22.1])
@@ -39,6 +40,9 @@ m4_define([va_api_x11_version],         [0.31.0])
 # libva package version number
 m4_define([libva_drm_package_version],  [1.1.0])
 m4_define([libva_x11_package_version],  [1.0.3])
+
+# libvpx version number
+m4_define([libvpx_version],             [1.2.0])
 
 AC_PREREQ([2.66])
 AC_INIT([mvt], [mvt_version],
@@ -83,6 +87,11 @@ AC_ARG_ENABLE([gstreamer],
                    [build GStreamer module @<:@default=default_gstreamer@:>@]),
     [], [enable_gstreamer=default_gstreamer])
 
+AC_ARG_ENABLE([ref-libvpx],
+    AS_HELP_STRING([--enable-ref-libvpx],
+        [build reference libvpx decoders @<:@default=default_ref_libvpx@:>@]),
+    [], [enable_ref_libvpx=default_ref_libvpx])
+
 AC_ARG_WITH([renderer],
     AC_HELP_STRING([--with-renderer=API],
                    [build with the specified rendering API
@@ -93,6 +102,11 @@ AC_ARG_WITH([gstreamer-api],
                    [build against the specified GStreamer API version
                     @<:@default=gst_api_version@:>@]),
     [GST_API_VERSION="$with_gstreamer_api"], [GST_API_VERSION=gst_api_version])
+
+dnl Resolve dependencies
+if test "$enable_ref_libvpx" = "yes"; then
+    enable_ffmpeg="yes"
+fi
 
 dnl Check for tools
 AC_PROG_CC
@@ -320,6 +334,29 @@ if test "$enable_gstreamer" = "yes" -a "$MVT_RENDERER" = "x11"; then
 fi
 
 dnl ---------------------------------------------------------------------------
+dnl -- Reference Decoders
+dnl ---------------------------------------------------------------------------
+
+dnl Check for libvpx
+USE_LIBVPX=0
+if test "$enable_ref_libvpx" = "yes"; then
+    PKG_CHECK_MODULES([LIBVPX], [vpx >= libvpx_version], [],
+        [AC_MSG_WARN([libvpx-dev package not found. Disabling]);
+         enable_ref_libvpx="no"])
+fi
+if test "$enable_ref_libvpx" = "yes"; then
+    saved_CPPFLAGS="$CPPFLAGS"
+    CPPFLAGS="$LIBVPX_CFLAGS"
+    AC_CHECK_HEADERS([vpx/vpx_decoder.h], [USE_LIBVPX=1],
+        [AC_MSG_WARN([incomplete libvpx-dev (headers) package. Disabling]);
+         enable_ref_libvpx="no"])
+    CPPFLAGS="$saved_CPPFLAGS"
+fi
+AC_DEFINE_UNQUOTED([USE_LIBVPX], [$USE_LIBVPX],
+    [Defined to 1 if VPx (libvpx) reference decoder is enabled])
+AM_CONDITIONAL([ENABLE_REF_VPX], [test $USE_LIBVPX -eq 1])
+
+dnl ---------------------------------------------------------------------------
 dnl -- Generate files and summary                                            --
 dnl ---------------------------------------------------------------------------
 
@@ -356,4 +393,5 @@ echo Enable GStreamer ................. : $enable_gstreamer
 if test "$enable_gstreamer" = "yes"; then
 echo GStreamer API version ............ : $GST_API_VERSION
 fi
+echo Enable reference VPx decoder ..... : $enable_ref_libvpx
 echo

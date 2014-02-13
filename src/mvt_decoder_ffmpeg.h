@@ -34,6 +34,7 @@
 #define MVT_DECODER_FFMPEG_GET_CLASS(dec) \
     MVT_DECODER_FFMPEG_CLASS(MVT_DECODER_GET_CLASS(dec))
 
+typedef AVCodec *(*MvtDecoderFFmpegFindDecoderFunc)(MvtDecoder *dec, int id);
 typedef bool (*MvtDecoderFFmpegInitContextFunc)(MvtDecoder *dec);
 typedef bool (*MvtDecoderFFmpegHandleFrameFunc)(MvtDecoder *dec, AVFrame *frame);
 
@@ -51,6 +52,7 @@ typedef struct {
     MvtDecoderClass base;
     MvtDecoderInitFunc init;
     MvtDecoderFinalizeFunc finalize;
+    MvtDecoderFFmpegFindDecoderFunc find_decoder;
     MvtDecoderFFmpegInitContextFunc init_context;
     MvtDecoderFFmpegHandleFrameFunc handle_frame;
 } MvtDecoderFFmpegClass;

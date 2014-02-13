@@ -12,6 +12,9 @@ endif
 if ENABLE_GSTREAMER
 pkglibexec_PROGRAMS += dec_gstreamer
 endif
+if ENABLE_REF_VPX
+pkglibexec_PROGRAMS += gen_ref_vpx
+endif
 
 # -----------------------------------------------------------------------------
 # --- MVT Utilities                                                         ---
@@ -168,6 +171,18 @@ dec_gstreamer_SOURCES	= $(dec_gstreamer_source_c)
 dec_gstreamer_CFLAGS	= $(dec_gstreamer_cflags)
 dec_gstreamer_LDADD	= $(dec_gstreamer_libs)
 
+# -----------------------------------------------------------------------------
+# --- Reference VPx decoder (libvpx)                                        ---
+# -----------------------------------------------------------------------------
+
+VPX_CFLAGS		= $(LIBVPX_CFLAGS)
+VPX_LIBS		= $(LIBVPX_LIBS)
+
+gen_ref_vpx_source_c	= gen_ref_vpx.c
+gen_ref_vpx_SOURCES	= $(gen_ref_vpx_source_c)
+gen_ref_vpx_CFLAGS	= $(VPX_CFLAGS) $(libdec_ffmpeg_cflags)
+gen_ref_vpx_LDADD	= $(VPX_LIBS) libdec_ffmpeg.la
+
 EXTRA_DIST = \
 	$(mvt_decoder_source_c)		\
 	$(mvt_decoder_source_h)		\
@@ -178,6 +193,8 @@ EXTRA_DIST = \
 	$(dec_ffmpeg_source_h)		\
 	$(dec_gstreamer_source_c)	\
 	$(dec_gstreamer_source_h)	\
+	$(gen_ref_vpx_source_c)		\
+	$(gen_ref_vpx_source_h)		\
 	$(NULL)
 
 # Extra clean files so that maintainer-clean removes *everything*

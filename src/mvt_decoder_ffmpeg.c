@@ -97,7 +97,10 @@ decoder_init(MvtDecoderFFmpeg *dec)
     if (!init_context(dec, avctx))
         return false;
 
-    codec = avcodec_find_decoder(avctx->codec_id);
+    if (klass->find_decoder)
+        codec = klass->find_decoder(MVT_DECODER(dec), avctx->codec_id);
+    else
+        codec = avcodec_find_decoder(avctx->codec_id);
     if (!codec)
         goto error_no_codec;
     if (avcodec_open2(avctx, codec, NULL) < 0)
