@@ -154,8 +154,26 @@ ffmpeg.configure.stamp:
 
 CLEANFILES = ffmpeg.build.stamp
 
+# Files for packaging
+include $(srcdir)/sources.frag
+
+ffmpeg_sources = \
+	$(ffmpeg_srcdir)/COPYING.LGPLv2.1 \
+	$(ffmpeg_srcdir)/Makefile \
+	$(ffmpeg_srcdir)/RELEASE \
+	$(ffmpeg_srcdir)/VERSION \
+	$(ffmpeg_srcdir)/configure \
+	$(ffmpeg_srcdir)/version.sh \
+	$(ffmpeg_source_dirs:%=$(ffmpeg_srcdir)/%/Makefile) \
+	$(ffmpeg_source_mak:%.mak=$(ffmpeg_srcdir)/%.mak) \
+	$(ffmpeg_source_c:%.c=$(ffmpeg_srcdir)/%.c) \
+	$(ffmpeg_source_h:%.h=$(ffmpeg_srcdir)/%.h) \
+	$(ffmpeg_source_asm:%.asm=$(ffmpeg_srcdir)/%.asm)
+
 EXTRA_DIST = \
 	libmvt_ffmpeg.vers	\
+	sources.frag		\
+	$(ffmpeg_sources)	\
 	$(NULL)
 
 # Extra clean files so that maintainer-clean removes *everything*
