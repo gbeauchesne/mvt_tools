@@ -116,17 +116,19 @@ mvt_report_write_headers(MvtReport *report)
 
     if (report->image_index > 0)
         return true;
-    return mvt_report_write_comment(report, "%5s %10s %-20s",
+    return mvt_report_write_comment(report, "%5s %10s S %-20s",
         "frame", "size", "hash");
 }
 
 // Writes image hash to the report file
 bool
-mvt_report_write_image_hash(MvtReport *report, MvtImage *image, MvtHash *hash)
+mvt_report_write_image_hash(MvtReport *report, MvtImage *image, MvtHash *hash,
+    uint32_t flags)
 {
     char value_string[2*MVT_HASH_VALUE_MAX_LENGTH+1], size_string[20];
     const uint8_t *value;
     uint32_t i, value_length;
+    const char *picture_structure_str;
 
     mvt_return_val_if_fail(report != NULL, false);
     mvt_return_val_if_fail(image != NULL, false);
@@ -159,8 +161,21 @@ mvt_report_write_image_hash(MvtReport *report, MvtImage *image, MvtHash *hash)
         sprintf(&value_string[2*i], "%02x", value[i]);
     value_string[2*value_length] = '\0';
 
-    fprintf(report->file, "%7d %10s 0x%-18s\n", report->image_index,
-        size_string, value_string);
+    // Picture structure
+    switch (flags & (VA_TOP_FIELD|VA_BOTTOM_FIELD)) {
+    case VA_TOP_FIELD:
+        picture_structure_str = "T";
+        break;
+    case VA_BOTTOM_FIELD:
+        picture_structure_str = "B";
+        break;
+    default:
+        picture_structure_str = "F";
+        break;
+    }
+
+    fprintf(report->file, "%7d %10s %s 0x%-18s\n", report->image_index,
+        size_string, picture_structure_str, value_string);
 
     report->image_index++;
     return true;

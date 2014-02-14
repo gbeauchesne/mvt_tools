@@ -45,7 +45,8 @@ mvt_report_write_comment(MvtReport *report, const char *format, ...);
 
 /** Writes image hash to the report file */
 bool
-mvt_report_write_image_hash(MvtReport *report, MvtImage *image, MvtHash *hash);
+mvt_report_write_image_hash(MvtReport *report, MvtImage *image, MvtHash *hash,
+    uint32_t flags);
 
 MVT_END_DECLS
 

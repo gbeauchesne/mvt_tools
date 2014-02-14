@@ -311,7 +311,7 @@ mvt_decoder_handle_image(MvtDecoder *decoder, MvtImage *image, uint32_t flags)
     if (decoder->hash && decoder->report) {
         if (!mvt_image_hash(image, decoder->hash))
             return false;
-        mvt_report_write_image_hash(decoder->report, image, decoder->hash);
+        mvt_report_write_image_hash(decoder->report, image, decoder->hash, 0);
     }
 
     if (decoder->output_file) {
