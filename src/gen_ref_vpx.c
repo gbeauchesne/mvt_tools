@@ -20,10 +20,12 @@
  * Boston, MA 02110-1301
  */
 
+#define _GNU_SOURCE 1 /* RTLD_DEFAULT */
 #define VPX_CODEC_DISABLE_COMPAT 1
 #include "sysdeps.h"
 #include <vpx/vpx_decoder.h>
 #include <vpx/vp8dx.h>
+#include <dlfcn.h>
 #include "mvt_decoder_ffmpeg.h"
 #include "ffmpeg_compat.h"
 
@@ -162,6 +164,28 @@ static AVCodec libvpx_vp8_decoder = {
     .capabilities       = CODEC_CAP_AUTO_THREADS | CODEC_CAP_DR1,
 };
 
+#if FFMPEG_HAS_VP9_DECODER
+static int
+vp9_init(AVCodecContext *avctx)
+{
+    const struct vpx_codec_iface *iface =
+        dlsym(RTLD_DEFAULT, "vpx_codec_vp9_dx_algo");
+
+    return iface ? vpx_init(avctx, iface) : AVERROR_DECODER_NOT_FOUND;
+}
+
+static AVCodec libvpx_vp9_decoder = {
+    .name               = "libvpx-vp9",
+    .long_name          = "libvpx VP9",
+    .type               = AVMEDIA_TYPE_VIDEO,
+    .id                 = AV_CODEC_ID_VP9,
+    .init               = vp9_init,
+    .close              = vpx_finalize,
+    .decode             = vpx_decode,
+    .capabilities       = CODEC_CAP_AUTO_THREADS | CODEC_CAP_DR1,
+};
+#endif
+
 static AVCodec *
 decoder_find_decoder(Decoder *decoder, int codec_id)
 {
@@ -171,6 +195,11 @@ decoder_find_decoder(Decoder *decoder, int codec_id)
     case AV_CODEC_ID_VP8:
         codec = &libvpx_vp8_decoder;
         break;
+#if FFMPEG_HAS_VP9_DECODER
+    case AV_CODEC_ID_VP9:
+        codec = &libvpx_vp9_decoder;
+        break;
+#endif
     default:
         codec = NULL;
         break;
