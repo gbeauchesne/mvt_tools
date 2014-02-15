@@ -28,6 +28,8 @@
 /** Codecs */
 typedef enum {
     MVT_CODEC_NONE,
+    /** Raw video */
+    MVT_CODEC_RAWVIDEO,
     /** MPEG-1 (ISO/IEC 11172) */
     MVT_CODEC_MPEG1,
     /** MPEG-2 (ISO/IEC 13818-2) */

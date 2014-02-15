@@ -82,6 +82,7 @@ ffmpeg_to_mvt_codec(enum AVCodecID codec_id, MvtCodec *codec_ptr)
     DEFINE_CODEC(CODEC, CODEC)
 
     switch (codec_id) {
+        DEFINE_CODEC_I(RAWVIDEO);
         DEFINE_CODEC(MPEG1VIDEO, MPEG1);
         DEFINE_CODEC(MPEG2VIDEO, MPEG2);
         DEFINE_CODEC_I(MPEG4);

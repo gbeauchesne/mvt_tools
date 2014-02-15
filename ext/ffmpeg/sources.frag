@@ -272,6 +272,7 @@ ffmpeg_source_c = \
 	libavformat/seek.c \
 	libavformat/url.c \
 	libavformat/utils.c \
+	libavformat/yuv4mpeg.c \
 	libavutil/adler32.c \
 	libavutil/aes.c \
 	libavutil/atomic.c \

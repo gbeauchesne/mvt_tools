@@ -68,8 +68,10 @@ FFMPEG_DEMUXERS	+= mpegps
 FFMPEG_DEMUXERS	+= mpegts
 FFMPEG_DEMUXERS	+= mpegtsraw
 FFMPEG_DEMUXERS	+= rawvideo
+FFMPEG_DEMUXERS	+= yuv4mpegpipe
 
 # Video codecs
+FFMPEG_DECODERS	+= rawvideo
 FFMPEG_DECODERS	+= mpeg2video
 FFMPEG_DEMUXERS	+= mpegvideo
 FFMPEG_PARSERS	+= mpegvideo

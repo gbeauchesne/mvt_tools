@@ -26,6 +26,7 @@
 
 // Codecs
 static const MvtMap codec_map[] = {
+    { "raw",    MVT_CODEC_RAWVIDEO  },
     { "mpeg1",  MVT_CODEC_MPEG1     },
     { "mpeg2",  MVT_CODEC_MPEG2     },
     { "mpeg4",  MVT_CODEC_MPEG4     },
