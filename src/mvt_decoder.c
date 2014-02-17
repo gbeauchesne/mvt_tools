@@ -68,6 +68,7 @@ mvt_decoder_options_clear(MvtDecoderOptions *options)
     free(options->filename);
     free(options->config_filename);
     free(options->report_filename);
+    free(options->output_filename);
     memset(options, 0, sizeof(*options));
 }
 
@@ -95,6 +96,8 @@ print_help(const char *prog)
            "-r, --report=PATH");
     printf("  %-28s  define the config filename (default: stdout)\n",
            "    --gen-config[=PATH]");
+    printf("  %-28s  define the output filename (default: <video>.raw)\n",
+           "    --gen-output[=PATH]");
 
     exit(EXIT_FAILURE);
 }
@@ -113,6 +116,8 @@ mvt_decoder_free(MvtDecoder *decoder)
         mvt_report_free(decoder->report);
     if (decoder->hash)
         mvt_hash_free(decoder->hash);
+    if (decoder->output_file)
+        mvt_image_file_close(decoder->output_file);
     mvt_decoder_options_clear(&decoder->options);
     free(decoder);
 }
@@ -131,6 +136,7 @@ mvt_decoder_new(void)
 
     decoder->profile = -1;
     mvt_decoder_options_init(&decoder->options);
+    mvt_image_info_init_defaults(&decoder->output_info);
     return decoder;
 }
 
@@ -138,6 +144,7 @@ static bool
 mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
 {
     MvtDecoderOptions * const options = &decoder->options;
+    bool gen_output = false;
 
     enum {
         OPT_HWACCEL = 1000,
@@ -152,11 +159,12 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
         { "vaapi",      no_argument,        NULL, OPT_VAAPI     },
         { "report",     required_argument,  NULL, 'r'           },
         { "gen-config", optional_argument,  NULL, OPT_GEN_CONF  },
+        { "gen-output", optional_argument,  NULL, 'o'           },
         { NULL, }
     };
 
     for (;;) {
-        int v = getopt_long(argc, argv, "-hc:r:", long_options, NULL);
+        int v = getopt_long(argc, argv, "-hc:r:o:", long_options, NULL);
         if (v < 0)
             break;
 
@@ -193,9 +201,31 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
             if (!options->report_filename)
                 goto error_alloc_memory;
             break;
+        case 'o':
+            free(options->output_filename);
+            if (optarg) {
+                options->output_filename = strdup(optarg);
+                if (!options->output_filename)
+                    goto error_alloc_memory;
+            }
+            gen_output = true;
+            break;
         default:
             break;
         }
+    }
+
+    if (gen_output && !options->output_filename && options->filename) {
+        const char *filename = get_basename(options->filename);
+        const size_t len = strlen(filename) + 4 /* ".raw" */ + 1;
+
+        options->output_filename = malloc(len);
+        if (!options->output_filename)
+            goto error_alloc_memory;
+        options->output_filename[0] = '\0';
+
+        strcpy(options->output_filename, filename);
+        strcat(options->output_filename, ".raw");
     }
     return true;
 
@@ -227,6 +257,12 @@ mvt_decoder_init(MvtDecoder *decoder, int argc, char *argv[])
     if (!decoder->hash)
         goto error_init_hash;
 
+    if (options->output_filename) {
+        decoder->output_file = mvt_image_file_open(options->output_filename,
+            MVT_IMAGE_FILE_MODE_WRITE);
+        if (!decoder->output_file)
+            goto error_open_output_file;
+    }
     return !klass->init || klass->init(decoder);
 
     /* ERRORS */
@@ -238,6 +274,10 @@ error_init_report:
     return false;
 error_init_hash:
     mvt_error("failed to initialize hash");
+    return false;
+error_open_output_file:
+    mvt_error("failed to open raw decoded output file `%s'",
+        options->output_filename);
     return false;
 }
 
@@ -261,6 +301,31 @@ mvt_decoder_handle_image(MvtDecoder *decoder, MvtImage *image, uint32_t flags)
     if (!mvt_image_hash(image, decoder->hash))
         return false;
     mvt_report_write_image_hash(decoder->report, image, decoder->hash);
+
+    if (decoder->output_file) {
+        if (decoder->num_frames == 0) {
+            MvtImageInfo * const info = &decoder->output_info;
+            bool image_changed;
+
+            image_changed = info->format != image->format ||
+                info->width != image->width || info->height != image->height;
+            if (image_changed) {
+                const MvtImageInfo old_info = *info;
+
+                mvt_image_info_init(info, image->format,
+                    image->width, image->height);
+                info->fps_n = old_info.fps_n;
+                info->fps_d = old_info.fps_d;
+                info->par_n = old_info.par_n;
+                info->par_d = old_info.par_d;
+            }
+            if (!mvt_image_file_write_headers(decoder->output_file, info))
+                return false;
+        }
+        if (!mvt_image_file_write_image(decoder->output_file, image))
+            return false;
+    }
+    decoder->num_frames++;
     return true;
 }
 

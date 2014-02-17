@@ -26,6 +26,7 @@
 #include "mvt_hash.h"
 #include "mvt_report.h"
 #include "mvt_codec.h"
+#include "mvt_image_file.h"
 
 MVT_BEGIN_DECLS
 
@@ -55,6 +56,7 @@ typedef struct {
     char *filename;             ///< Input filename
     char *config_filename;      ///< Filename of the generated test config
     char *report_filename;      ///< Report filename
+    char *output_filename;      ///< Output filename
     MvtHashType hash_type;      ///< Codec hash type to use
     MvtHwaccel hwaccel;         ///< Hardware acceleration mode
 } MvtDecoderOptions;
@@ -68,6 +70,9 @@ typedef struct {
     int profile;                ///< Identified profile
     uint32_t max_width;         ///< Max decoded width in pixels
     uint32_t max_height;        ///< Max decoded height in pixels
+    MvtImageFile *output_file;  ///< Raw video output file
+    MvtImageInfo output_info;   ///< Raw video output info
+    uint32_t num_frames;        ///< Number of frames handled
 } MvtDecoder;
 
 typedef bool (*MvtDecoderInitFunc)(MvtDecoder *decoder);

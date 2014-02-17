@@ -40,6 +40,28 @@ init_context(MvtDecoderFFmpeg *dec, AVCodecContext *avctx)
     return true;
 }
 
+static void
+init_video_info(MvtDecoderFFmpeg *dec)
+{
+    MvtImageInfo * const info = &MVT_DECODER(dec)->output_info;
+    AVCodecContext * const avctx = dec->avctx;
+    AVRational fps;
+
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(55,0,100)
+    av_reduce(&fps.num, &fps.den, avctx->time_base.den, avctx->time_base.num,
+        (1UL << 31) - 1);
+    if (avctx->ticks_per_frame > 1)
+        fps.num /= avctx->ticks_per_frame;
+#else
+    fps = av_stream_get_r_frame_rate(dec->stream);
+#endif
+
+    info->fps_n = fps.num;
+    info->fps_d = fps.den;
+    info->par_n = avctx->sample_aspect_ratio.num;
+    info->par_d = avctx->sample_aspect_ratio.den;
+}
+
 static bool
 init_codec_info(MvtDecoderFFmpeg *dec)
 {
@@ -111,6 +133,7 @@ decoder_init(MvtDecoderFFmpeg *dec)
     dec->frame = avcodec_alloc_frame();
     if (!dec->frame)
         goto error_alloc_frame;
+    init_video_info(dec);
     return true;
 
     /* ERRORS */

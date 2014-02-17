@@ -305,12 +305,18 @@ static gboolean
 app_update_video_info(App *app, GstCaps *caps)
 {
     GstVideoInfo * const vip = &app->vinfo;
+    MvtImageInfo * const info = &MVT_DECODER(app)->output_info;
 
     if (!gst_video_info_from_caps(vip, caps))
         goto error_invalid_caps;
     GST_INFO("new caps: format %s, size %dx%d",
         gst_video_format_to_string(GST_VIDEO_INFO_FORMAT(vip)),
         GST_VIDEO_INFO_WIDTH(vip), GST_VIDEO_INFO_HEIGHT(vip));
+
+    info->fps_n = GST_VIDEO_INFO_FPS_N(vip);
+    info->fps_d = GST_VIDEO_INFO_FPS_D(vip);
+    info->par_n = GST_VIDEO_INFO_PAR_N(vip);
+    info->par_d = GST_VIDEO_INFO_PAR_D(vip);
     return TRUE;
 
     /* ERRORS */
