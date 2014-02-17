@@ -34,6 +34,16 @@
         MVT_GEN_CONCAT(C_,FORMAT)                                       \
     }
 
+#define DEF_YUVp(BIT_DEPTH, FOURCC, ENDIAN, BPP, SUB)                   \
+    [MVT_GEN_CONCAT4(VIDEO_FORMAT_I,SUB,P,BIT_DEPTH)] = {               \
+        MVT_GEN_STRING(MVT_GEN_CONCAT4(I,SUB,p,BIT_DEPTH)),             \
+        MVT_GEN_CONCAT4(VIDEO_FORMAT_I,SUB,P,BIT_DEPTH),                \
+        MVT_GEN_CONCAT(VA_RT_FORMAT_YUV,SUB),                           \
+        MVT_GEN_CONCAT(R_YUV,SUB),                                      \
+        { VA_FOURCC FOURCC, VA_##ENDIAN##_FIRST, BPP, },                \
+        C_YUVp(BIT_DEPTH)                                               \
+    }
+
 #define DEF_RGB(FORMAT, FOURCC, ENDIAN, BPP, DEPTH, R,G,B,A)            \
     [MVT_GEN_CONCAT(VIDEO_FORMAT_,FORMAT)] = {                          \
         MVT_GEN_STRING(FORMAT),                                         \
@@ -54,21 +64,28 @@
 #define R_YUV400        R_FF
 #define R_RGB32         R_FF
 
-#define C_NV12  2, 3, {{0,0,1},{1,0,2},{1,1,2},}
-#define C_I420  3, 3, {{0,0,1},{1,0,1},{2,0,1},}
-#define C_YV12  3, 3, {{0,0,1},{2,0,1},{1,0,1},}
-#define C_YUY2  1, 3, {{0,0,2},{0,1,4},{0,3,4},}
-#define C_UYVY  1, 3, {{0,1,2},{0,0,4},{0,2,4},}
-#define C_AYUV  1, 4, {{0,1,4},{0,2,4},{0,3,4},{0,0,4},}
-#define C_Y800  1, 1, {{0,0,1},}
-#define C_ARGB  1, 4, {{0,1,4},{0,2,4},{0,3,4},{0,0,4}}
-#define C_xRGB  1, 3, {{0,1,4},{0,2,4},{0,3,4},}
-#define C_ABGR  1, 4, {{0,3,4},{0,2,4},{0,1,4},{0,0,4}}
-#define C_xBGR  1, 3, {{0,3,4},{0,2,4},{0,1,4},}
-#define C_RGBA  1, 4, {{0,0,4},{0,1,4},{0,2,4},{0,3,4}}
-#define C_RGBx  1, 3, {{0,0,4},{0,1,4},{0,2,4},}
-#define C_BGRA  1, 4, {{0,2,4},{0,1,4},{0,0,4},{0,3,4}}
-#define C_BGRx  1, 3, {{0,2,4},{0,1,4},{0,0,4},}
+#define C_NV12          2, 3, {{0,0,1,8},{1,0,2,8},{1,1,2,8},}
+#define C_I420          3, 3, {{0,0,1,8},{1,0,1,8},{2,0,1,8},}
+#define C_YV12          3, 3, {{0,0,1,8},{2,0,1,8},{1,0,1,8},}
+#define C_YUY2          1, 3, {{0,0,2,8},{0,1,4,8},{0,3,4,8},}
+#define C_UYVY          1, 3, {{0,1,2,8},{0,0,4,8},{0,2,4,8},}
+#define C_AYUV          1, 4, {{0,1,4,8},{0,2,4,8},{0,3,4,8},{0,0,4,8},}
+#define C_Y800          1, 1, {{0,0,1,8},}
+#define C_ARGB          1, 4, {{0,1,4,8},{0,2,4,8},{0,3,4,8},{0,0,4}}
+#define C_xRGB          1, 3, {{0,1,4,8},{0,2,4,8},{0,3,4,8},}
+#define C_ABGR          1, 4, {{0,3,4,8},{0,2,4,8},{0,1,4,8},{0,0,4}}
+#define C_xBGR          1, 3, {{0,3,4,8},{0,2,4,8},{0,1,4,8},}
+#define C_RGBA          1, 4, {{0,0,4,8},{0,1,4,8},{0,2,4,8},{0,3,4}}
+#define C_RGBx          1, 3, {{0,0,4,8},{0,1,4,8},{0,2,4,8},}
+#define C_BGRA          1, 4, {{0,2,4,8},{0,1,4,8},{0,0,4,8},{0,3,4}}
+#define C_BGRx          1, 3, {{0,2,4,8},{0,1,4,8},{0,0,4,8},}
+#define C_YUVp(n)       3, 3, {{0,0,2,n},{1,0,2,n},{2,0,2,n},}
+
+#ifdef WORDS_BIGENDIAN
+#define VA_NSB_FIRST VA_MSB_FIRST
+#else
+#define VA_NSB_FIRST VA_LSB_FIRST
+#endif
 
 static const VideoFormatInfo g_video_formats[] = {
     DEF_YUV(NV12, ('N','V','1','2'), LSB, 12, 420),
@@ -113,11 +130,21 @@ static const VideoFormatInfo g_video_formats[] = {
     DEF_RGB(BGRA, ('A','R','G','B'), LSB, 32,
             32, 0x0000ff00, 0x00ff0000, 0xff000000, 0x000000ff),
 #endif
+    DEF_YUVp(10,  ('P','0','1','0'), NSB, 15, 420),
+    DEF_YUVp(12,  ('P','0','1','2'), NSB, 18, 420),
+    DEF_YUVp(16,  ('P','0','1','6'), NSB, 24, 420),
+    DEF_YUVp(10,  ('P','2','1','0'), NSB, 20, 422),
+    DEF_YUVp(12,  ('P','2','1','2'), NSB, 24, 422),
+    DEF_YUVp(16,  ('P','2','1','6'), NSB, 32, 422),
+    DEF_YUVp(10,  ('P','4','1','0'), NSB, 30, 444),
+    DEF_YUVp(12,  ('P','4','1','2'), NSB, 36, 444),
+    DEF_YUVp(16,  ('P','4','1','6'), NSB, 48, 444),
     { NULL, }
 };
 
 #undef DEF_RGB
 #undef DEF_YUV
+#undef DEF_YUVp
 
 static inline bool
 va_format_is_rgb(const VAImageFormat *va_format)

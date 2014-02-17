@@ -81,6 +81,12 @@ winsys_create_display(const gchar *name)
 /* --- GStreamer utilities                                              --- */
 /* ------------------------------------------------------------------------ */
 
+#if G_BYTE_ORDER == G_LITTLE_ENDIAN
+#define GST_VIDEO_FORMAT_NE(fmt) G_PASTE(G_PASTE(GST_VIDEO_FORMAT_,fmt),LE)
+#else
+#define GST_VIDEO_FORMAT_NE(fmt) G_PASTE(G_PASTE(GST_VIDEO_FORMAT_,fmt),BE)
+#endif
+
 typedef int (*ProfileFromNameFunc)(const gchar *name);
 typedef bool (*ProfileFromCodecDataFunc)(const uint8_t *buf, uint32_t buf_size,
     int *profile_ptr);
@@ -394,6 +400,15 @@ app_handle_sw_surface(App *app, GstBuffer *buffer,
         break;
     case GST_VIDEO_FORMAT_AYUV:
         format = VIDEO_FORMAT_AYUV;
+        break;
+    case GST_VIDEO_FORMAT_NE(I420_10):
+        format = VIDEO_FORMAT_I420P10;
+        break;
+    case GST_VIDEO_FORMAT_NE(I422_10):
+        format = VIDEO_FORMAT_I422P10;
+        break;
+    case GST_VIDEO_FORMAT_NE(Y444_10):
+        format = VIDEO_FORMAT_I444P10;
         break;
     default:
         format = VIDEO_FORMAT_UNKNOWN;

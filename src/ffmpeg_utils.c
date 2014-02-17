@@ -46,6 +46,35 @@ ffmpeg_to_mvt_video_format(enum AVPixelFormat pix_fmt, VideoFormat *format_ptr)
     case AV_PIX_FMT_YUV420P:
         format = VIDEO_FORMAT_I420;
         break;
+    case AV_PIX_FMT_YUV420P10:
+        format = VIDEO_FORMAT_I420P10;
+        break;
+    case AV_PIX_FMT_YUV422P10:
+        format = VIDEO_FORMAT_I422P10;
+        break;
+    case AV_PIX_FMT_YUV444P10:
+        format = VIDEO_FORMAT_I444P10;
+        break;
+#if LIBAVUTIL_VERSION_INT > AV_VERSION_INT(51,34,0)
+    case AV_PIX_FMT_YUV420P12:
+        format = VIDEO_FORMAT_I420P12;
+        break;
+    case AV_PIX_FMT_YUV422P12:
+        format = VIDEO_FORMAT_I422P12;
+        break;
+    case AV_PIX_FMT_YUV444P12:
+        format = VIDEO_FORMAT_I444P12;
+        break;
+#endif
+    case AV_PIX_FMT_YUV420P16:
+        format = VIDEO_FORMAT_I420P16;
+        break;
+    case AV_PIX_FMT_YUV422P16:
+        format = VIDEO_FORMAT_I422P16;
+        break;
+    case AV_PIX_FMT_YUV444P16:
+        format = VIDEO_FORMAT_I444P16;
+        break;
     case AV_PIX_FMT_NV12:
         format = VIDEO_FORMAT_NV12;
         break;

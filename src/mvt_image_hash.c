@@ -31,7 +31,7 @@ mvt_image_hash_component(MvtImage *image, MvtHash *hash,
 {
     const VideoFormatComponentInfo * const cip = &vip->components[component];
     const uint8_t *p;
-    uint32_t x, y, w, h, stride;
+    uint32_t x, y, w, h, stride, bpc;
 
     w = image->width;
     h = image->height;
@@ -41,17 +41,19 @@ mvt_image_hash_component(MvtImage *image, MvtHash *hash,
     }
     stride = image->pitches[cip->plane];
 
+    bpc = (cip->bit_depth + 7) / 8; // bytes per component
+
     p = get_component_ptr(image, cip, 0, 0);
-    if (cip->pixel_stride == 1) {
+    if (cip->pixel_stride == bpc) {
         for (y = 0; y < h; y++) {
-            mvt_hash_update(hash, p, w);
+            mvt_hash_update(hash, p, w * bpc);
             p += stride;
         }
     }
     else {
         for (y = 0; y < h; y++) {
             for (x = 0; x < w; x++)
-                mvt_hash_update(hash, p + x * cip->pixel_stride, 1);
+                mvt_hash_update(hash, p + x * cip->pixel_stride, bpc);
             p += stride;
         }
     }

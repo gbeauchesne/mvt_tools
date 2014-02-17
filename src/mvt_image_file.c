@@ -179,9 +179,28 @@ y4m_get_picture_structure(uint32_t fields)
     return picture_structure;
 }
 
+// Retrieves the Y4M colorspace bit depth (YSCSS)
+static int
+y4m_get_colorspace_depth(const VideoFormatInfo *vip)
+{
+    int i, bit_depth = 8;
+
+    if (vip->num_planes == vip->num_components) {
+        int d = vip->components[0].bit_depth;
+        for (i = 1; i < vip->num_components; i++) {
+            const VideoFormatComponentInfo * const cip = &vip->components[i];
+            if (cip->bit_depth != d)
+                break;
+        }
+        if (i == vip->num_components)
+            bit_depth = d;
+    }
+    return bit_depth;
+}
+
 // Retrieves the Y4M colorspace string
 static const char *
-y4m_get_colorspace(const VideoFormatInfo *vip)
+y4m_get_colorspace(const VideoFormatInfo *vip, int depth)
 {
     const char *colorspace;
 
@@ -195,7 +214,11 @@ y4m_get_colorspace(const VideoFormatInfo *vip)
         break;
 #endif
     case VA_RT_FORMAT_YUV420:
-        colorspace = "420jpeg"; /* XXX: handle chroma sites */
+        if (depth > 8)
+            colorspace = "420";
+        else {
+            colorspace = "420jpeg"; /* XXX: handle chroma sites */
+        }
         break;
     case VA_RT_FORMAT_YUV422:
         colorspace = "422";
@@ -214,17 +237,38 @@ y4m_get_colorspace(const VideoFormatInfo *vip)
 static VideoFormat
 y4m_get_video_format(const char *colorspace)
 {
-    int chroma_type;
+    int chroma_type, depth = 8;
 
     if (strcmp(colorspace, "mono") == 0)
         return VIDEO_FORMAT_Y800;
     else if (strcmp(colorspace, "444alpha") == 0)
         return VIDEO_FORMAT_AYUV;
 
-    if (sscanf(colorspace, "%d", &chroma_type) == 1) {
+    if (sscanf(colorspace, "%d%*[pP]%d", &chroma_type, &depth) > 0) {
         switch (chroma_type) {
-        case 420: return VIDEO_FORMAT_I420;
-        case 422: return VIDEO_FORMAT_YUY2;
+        case 420:
+            switch (depth) {
+            case 8:  return VIDEO_FORMAT_I420;
+            case 10: return VIDEO_FORMAT_I420P10;
+            case 12: return VIDEO_FORMAT_I420P12;
+            case 16: return VIDEO_FORMAT_I420P16;
+            }
+            break;
+        case 422:
+            switch (depth) {
+            case 8:  return VIDEO_FORMAT_YUY2;
+            case 10: return VIDEO_FORMAT_I422P10;
+            case 12: return VIDEO_FORMAT_I422P12;
+            case 16: return VIDEO_FORMAT_I422P16;
+            }
+            break;
+        case 444:
+            switch (depth) {
+            case 10: return VIDEO_FORMAT_I444P10;
+            case 12: return VIDEO_FORMAT_I444P12;
+            case 16: return VIDEO_FORMAT_I444P16;
+            }
+            break;
         }
     }
     return VIDEO_FORMAT_UNKNOWN;
@@ -238,8 +282,10 @@ y4m_write_header(MvtImageFile *fp)
     const VideoFormatInfo * const vip = video_format_get_info(info->format);
     const char *colorspace;
     char picture_structure;
+    int depth;
 
-    colorspace = y4m_get_colorspace(vip);
+    depth = y4m_get_colorspace_depth(vip);
+    colorspace = y4m_get_colorspace(vip, depth);
     if (!colorspace)
         return false;
 
@@ -250,6 +296,8 @@ y4m_write_header(MvtImageFile *fp)
     fprintf(fp->file, "%s W%u H%u F%u:%u A%u:%u I%c C%s",
         Y4M_HEADER_TAG, info->width, info->height, info->fps_n, info->fps_d,
         info->par_n, info->par_d, picture_structure, colorspace);
+    if (depth > 8)
+        fprintf(fp->file, "p%d XYSCSS=%sP%d", depth, colorspace, depth);
     fprintf(fp->file, "\n");
     return true;
 }
@@ -261,7 +309,7 @@ y4m_write_image_component(MvtImageFile *fp, MvtImage *image,
 {
     const VideoFormatComponentInfo * const cip = &vip->components[n];
     const uint8_t *p;
-    uint32_t x, y, w, h, stride;
+    uint32_t x, y, w, h, stride, bpc;
 
     w = image->width;
     h = image->height;
@@ -271,10 +319,12 @@ y4m_write_image_component(MvtImageFile *fp, MvtImage *image,
     }
     stride = image->pitches[cip->plane];
 
+    bpc = (cip->bit_depth + 7) / 8; // bytes per component
+
     p = get_component_ptr(image, cip, 0, 0);
-    if (cip->pixel_stride == 1) {
+    if (cip->pixel_stride == bpc) {
         for (y = 0; y < h; y++) {
-            if (fwrite(p, w, 1, fp->file) != 1)
+            if (fwrite(p, w, bpc, fp->file) != bpc)
                 return false;
             p += stride;
         }
@@ -282,7 +332,7 @@ y4m_write_image_component(MvtImageFile *fp, MvtImage *image,
     else {
         for (y = 0; y < h; y++) {
             for (x = 0; x < w; x++) {
-                if (putc(p[x * cip->pixel_stride], fp->file) == EOF)
+                if (fwrite(p + x * cip->pixel_stride, bpc, 1, fp->file) != 1)
                     return false;
             }
             p += stride;
@@ -379,8 +429,7 @@ y4m_read_image_component(MvtImageFile *fp, MvtImage *image,
 {
     const VideoFormatComponentInfo * const cip = &vip->components[n];
     uint8_t *p;
-    uint32_t x, y, w, h, stride;
-    int c;
+    uint32_t x, y, w, h, stride, bpc;
 
     w = image->width;
     h = image->height;
@@ -390,10 +439,12 @@ y4m_read_image_component(MvtImageFile *fp, MvtImage *image,
     }
     stride = image->pitches[cip->plane];
 
+    bpc = (cip->bit_depth + 7) / 8; // bytes per component
+
     p = get_component_ptr(image, cip, 0, 0);
-    if (cip->pixel_stride == 1) {
+    if (cip->pixel_stride == bpc) {
         for (y = 0; y < h; y++) {
-            if (fread(p, w, 1, fp->file) != 1)
+            if (fread(p, w, bpc, fp->file) != bpc)
                 return false;
             p += stride;
         }
@@ -401,9 +452,8 @@ y4m_read_image_component(MvtImageFile *fp, MvtImage *image,
     else {
         for (y = 0; y < h; y++) {
             for (x = 0; x < w; x++) {
-                if ((c = fgetc(fp->file)) == EOF)
+                if (fread(p + x * cip->pixel_stride, bpc, 1, fp->file) != 1)
                     return false;
-                p[x * cip->pixel_stride] = c;
             }
             p += stride;
         }

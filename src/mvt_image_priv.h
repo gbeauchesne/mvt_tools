@@ -43,7 +43,7 @@ round_up(uint32_t v, uint32_t a)
 }
 
 // Get pointer to component at the specified coordinates
-static inline uint8_t *
+static inline void *
 get_component_ptr(MvtImage *image, const VideoFormatComponentInfo *cip,
     int x, int y)
 {
@@ -53,18 +53,58 @@ get_component_ptr(MvtImage *image, const VideoFormatComponentInfo *cip,
 
 // Get 8-bit component at the specified coordinates
 static inline const uint8_t
-get_component(MvtImage *image, const VideoFormatComponentInfo *cip,
+get_component8(MvtImage *image, const VideoFormatComponentInfo *cip,
     int x, int y)
 {
-    return *get_component_ptr(image, cip, x, y);
+    return *((uint8_t *)get_component_ptr(image, cip, x, y));
 }
 
 // Put 8-bit component to the specified coordinates
 static inline void
-put_component(MvtImage *image, const VideoFormatComponentInfo *cip,
+put_component8(MvtImage *image, const VideoFormatComponentInfo *cip,
     int x, int y, uint8_t v)
 {
-    *get_component_ptr(image, cip, x, y) = v;
+    *((uint8_t *)get_component_ptr(image, cip, x, y)) = v;
+}
+
+// Get 16-bit component at the specified coordinates
+static inline const uint16_t
+get_component16(MvtImage *image, const VideoFormatComponentInfo *cip,
+    int x, int y)
+{
+    const uint16_t * const p = (uint16_t *)get_component_ptr(image, cip, x, y);
+
+    return *p & ((1U << cip->bit_depth) - 1);
+}
+
+// Put 16-bit component to the specified coordinates
+static inline void
+put_component16(MvtImage *image, const VideoFormatComponentInfo *cip,
+    int x, int y, uint16_t v)
+{
+    uint16_t * const p = get_component_ptr(image, cip, x, y);
+
+    *p = v & ((1U << cip->bit_depth) - 1);
+}
+
+// Get component value at the specified coordinates
+static inline const uint32_t
+get_component(MvtImage *image, const VideoFormatComponentInfo *cip,
+    int x, int y)
+{
+    return (MVT_LIKELY(cip->bit_depth <= 8) ?
+        get_component8(image, cip, x, y) : get_component16(image, cip, x, y));
+}
+
+// Put component value to the specified coordinates
+static inline void
+put_component(MvtImage *image, const VideoFormatComponentInfo *cip,
+    int x, int y, uint32_t v)
+{
+    if (MVT_LIKELY(cip->bit_depth <= 8))
+        put_component8(image, cip, x, y, v);
+    else
+        put_component16(image, cip, x, y, v);
 }
 
 // Gets RGB pixel at the specified coordinates
@@ -72,9 +112,9 @@ static inline void
 get_rgb_pixel(MvtImage *image, const VideoFormatInfo *vip, int x, int y,
     uint8_t *R_ptr, uint8_t *G_ptr, uint8_t *B_ptr)
 {
-    *R_ptr = get_component(image, &vip->components[0], x, y);
-    *G_ptr = get_component(image, &vip->components[1], x, y);
-    *B_ptr = get_component(image, &vip->components[2], x, y);
+    *R_ptr = get_component8(image, &vip->components[0], x, y);
+    *G_ptr = get_component8(image, &vip->components[1], x, y);
+    *B_ptr = get_component8(image, &vip->components[2], x, y);
 }
 
 // Puts RGB pixel at the specified coordinates
@@ -82,9 +122,9 @@ static inline void
 put_rgb_pixel(MvtImage *image, const VideoFormatInfo *vip, int x, int y,
     uint8_t R, uint8_t G, uint8_t B)
 {
-    put_component(image, &vip->components[0], x, y, R);
-    put_component(image, &vip->components[1], x, y, G);
-    put_component(image, &vip->components[2], x, y, B);
+    put_component8(image, &vip->components[0], x, y, R);
+    put_component8(image, &vip->components[1], x, y, G);
+    put_component8(image, &vip->components[2], x, y, B);
 }
 
 #endif /* MVT_IMAGE_PRIV_H */

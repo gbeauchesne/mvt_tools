@@ -70,6 +70,24 @@ typedef enum {
     VIDEO_FORMAT_RGBA,
     /** Packed RGB 8:8:8, 32-bit, B G R A */
     VIDEO_FORMAT_BGRA,
+    /** Planar YUV 4:2:0, 15-bit, 3 planes for Y U V, 10 bits per sample */
+    VIDEO_FORMAT_I420P10,
+    /** Planar YUV 4:2:0, 18-bit, 3 planes for Y U V, 12 bits per sample */
+    VIDEO_FORMAT_I420P12,
+    /** Planar YUV 4:2:0, 24-bit, 3 planes for Y U V, 16 bits per sample */
+    VIDEO_FORMAT_I420P16,
+    /** Planar YUV 4:2:2, 20-bit, 3 planes for Y U V, 10 bits per sample */
+    VIDEO_FORMAT_I422P10,
+    /** Planar YUV 4:2:2, 24-bit, 3 planes for Y U V, 12 bits per sample */
+    VIDEO_FORMAT_I422P12,
+    /** Planar YUV 4:2:2, 32-bit, 3 planes for Y U V, 16 bits per sample */
+    VIDEO_FORMAT_I422P16,
+    /** Planar YUV 4:4:4, 30-bit, 3 planes for Y U V, 10 bits per sample */
+    VIDEO_FORMAT_I444P10,
+    /** Planar YUV 4:4:4, 36-bit, 3 planes for Y U V, 12 bits per sample */
+    VIDEO_FORMAT_I444P12,
+    /** Planar YUV 4:4:4, 48-bit, 3 planes for Y U V, 16 bits per sample */
+    VIDEO_FORMAT_I444P16,
     /** Number of video formats */
     VIDEO_FORMAT_COUNT,
 
@@ -89,6 +107,7 @@ typedef struct {
     uint8_t             plane;          ///< Plane identifier
     uint8_t             pixel_offset;   ///< Byte offset within the pixel
     uint8_t             pixel_stride;   ///< Number of bytes for a pixel
+    uint8_t             bit_depth;      ///< Number of bits for a sample
 } VideoFormatComponentInfo;
 
 typedef struct {
