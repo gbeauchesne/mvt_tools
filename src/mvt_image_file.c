@@ -21,15 +21,20 @@
  */
 
 #include "sysdeps.h"
+#include <ctype.h>
 #include "mvt_image_file.h"
 #include "mvt_image_priv.h"
 
 typedef bool (*MvtImageFileWriteHeaderFunc)(MvtImageFile *fp);
 typedef bool (*MvtImageFileWriteImageFunc)(MvtImageFile *fp, MvtImage *image);
+typedef bool (*MvtImageFileReadHeaderFunc)(MvtImageFile *fp);
+typedef bool (*MvtImageFileReadImageFunc)(MvtImageFile *fp, MvtImage *image);
 
 typedef struct {
     MvtImageFileWriteHeaderFunc write_header;
     MvtImageFileWriteImageFunc  write_image;
+    MvtImageFileReadHeaderFunc  read_header;
+    MvtImageFileReadImageFunc   read_image;
 } MvtImageFileClass;
 
 struct MvtImageFile_s {
@@ -47,6 +52,102 @@ struct MvtImageFile_s {
 // Default pixel aspect ratio (1:1)
 #define DEFAULT_PAR_N 1
 #define DEFAULT_PAR_D 1
+
+/* ------------------------------------------------------------------------ */
+/* --- Helpers                                                          --- */
+/* ------------------------------------------------------------------------ */
+
+typedef struct {
+    char *      str;
+    uint32_t    len;
+    uint32_t    maxlen;
+} Token;
+
+static void
+token_init(Token *token)
+{
+    memset(token, 0, sizeof(*token));
+}
+
+static void
+token_clear(Token *token)
+{
+    free(token->str);
+    token->len = 0;
+    token->maxlen = 0;
+}
+
+static bool
+token_append(Token *token, char *buf, uint32_t buf_size)
+{
+    char *str;
+    uint32_t len;
+
+    if (!buf || !buf_size)
+        return true;
+
+    len = token->len + buf_size + 1;
+    if (len > token->maxlen) {
+        len += (len >> 3) + 1; // +~12%
+        str = realloc(token->str, len);
+        if (!str)
+            return false;
+        token->str = str;
+        token->maxlen = len;
+    }
+    memcpy(token->str + token->len, buf, buf_size);
+    token->len += buf_size;
+    token->str[token->len] = '\0';
+    return true;
+}
+
+static bool
+token_read(Token *token, FILE *fp, char *sep_ptr)
+{
+    char sep, buf[BUFSIZ];
+    int c, buf_size = 0;
+
+    if (!sep_ptr)
+        sep_ptr = &sep;
+
+    if (feof(fp)) {
+        *sep_ptr = EOF;
+        return false;
+    }
+
+    *sep_ptr = '\0';
+    token->len = 0;
+    while ((c = fgetc(fp)) != EOF && !isspace(c)) {
+        buf[buf_size++] = c;
+        if (buf_size == sizeof(buf)) {
+            if (!token_append(token, buf, buf_size))
+                return false;
+            buf_size = 0;
+        }
+    }
+    if (!token_append(token, buf, buf_size))
+        return false;
+
+    *sep_ptr = c;
+    return true;
+}
+
+static bool
+str_parse_uint(const char *str, char **end_ptr, uint32_t *value_ptr)
+{
+    unsigned long v;
+    char *end = NULL;
+
+    v = strtoul(str, &end, 10);
+    if (end == str)
+        return false;
+
+    if (end_ptr)
+        *end_ptr = end;
+    if (value_ptr)
+        *value_ptr = v;
+    return true;
+}
 
 /* ------------------------------------------------------------------------ */
 /* --- Y4M Format (YUV)                                                 --- */
@@ -107,6 +208,26 @@ y4m_get_colorspace(const VideoFormatInfo *vip)
         break;
     }
     return colorspace;
+}
+
+// Retrieves a video format matching the supplied colorspace string
+static VideoFormat
+y4m_get_video_format(const char *colorspace)
+{
+    int chroma_type;
+
+    if (strcmp(colorspace, "mono") == 0)
+        return VIDEO_FORMAT_Y800;
+    else if (strcmp(colorspace, "444alpha") == 0)
+        return VIDEO_FORMAT_AYUV;
+
+    if (sscanf(colorspace, "%d", &chroma_type) == 1) {
+        switch (chroma_type) {
+        case 420: return VIDEO_FORMAT_I420;
+        case 422: return VIDEO_FORMAT_YUY2;
+        }
+    }
+    return VIDEO_FORMAT_UNKNOWN;
 }
 
 // Writes Y4M file header
@@ -192,9 +313,144 @@ y4m_write_image(MvtImageFile *fp, MvtImage *image)
     return true;
 }
 
+// Reads Y4M headers
+static bool
+y4m_read_header(MvtImageFile *fp)
+{
+    MvtImageInfo * const info = &fp->info;
+    Token token;
+    char sep = 0, *end;
+    bool success = false;
+    uint32_t v0, v1;
+
+    token_init(&token);
+    if (!token_read(&token, fp->file, &sep))
+        goto cleanup;
+    if (strcmp(token.str, Y4M_HEADER_TAG) != 0)
+        goto cleanup;
+    while (!success && token_read(&token, fp->file, &sep)) {
+        const char * const str = token.str;
+        switch (str[0]) {
+        case 'W':
+            if (str_parse_uint(&str[1], NULL, &v0))
+                info->width = v0;
+            break;
+        case 'H':
+            if (str_parse_uint(&str[1], NULL, &v0))
+                info->height = v0;
+            break;
+        case 'F':
+            if (str_parse_uint(&str[1], &end, &v0) && *end == ':' &&
+                str_parse_uint(&end[1], NULL, &v1))
+                info->fps_n = v0, info->fps_d = v1;
+            break;
+        case 'A':
+            if (str_parse_uint(&str[1], &end, &v0) && *end == ':' &&
+                str_parse_uint(&end[1], NULL, &v1))
+                info->par_n = v0, info->par_d = v1;
+            break;
+        case 'I':
+            if (str[1] != 'p')
+                mvt_warning("unsupported interlacing mode '%c'", str[1]);
+            break;
+        case 'C':
+            v0 = y4m_get_video_format(&str[1]);
+            if (v0 != VIDEO_FORMAT_UNKNOWN)
+                info->format = v0;
+            break;
+        case 'X':
+            break;
+        default:
+            mvt_warning("unsupported token `%s'", str);
+            break;
+        }
+        success = sep == '\n';
+    }
+
+cleanup:
+    token_clear(&token);
+    return success;
+}
+
+// Reads image component from Y4M file
+static bool
+y4m_read_image_component(MvtImageFile *fp, MvtImage *image,
+    const VideoFormatInfo *vip, uint32_t n)
+{
+    const VideoFormatComponentInfo * const cip = &vip->components[n];
+    uint8_t *p;
+    uint32_t x, y, w, h, stride;
+    int c;
+
+    w = image->width;
+    h = image->height;
+    if (n > 0) {
+        w = (w + (1U << vip->chroma_w_shift) - 1) >> vip->chroma_w_shift;
+        h = (h + (1U << vip->chroma_h_shift) - 1) >> vip->chroma_h_shift;
+    }
+    stride = image->pitches[cip->plane];
+
+    p = get_component_ptr(image, cip, 0, 0);
+    if (cip->pixel_stride == 1) {
+        for (y = 0; y < h; y++) {
+            if (fread(p, w, 1, fp->file) != 1)
+                return false;
+            p += stride;
+        }
+    }
+    else {
+        for (y = 0; y < h; y++) {
+            for (x = 0; x < w; x++) {
+                if ((c = fgetc(fp->file)) == EOF)
+                    return false;
+                p[x * cip->pixel_stride] = c;
+            }
+            p += stride;
+        }
+    }
+    return true;
+}
+
+// Reads image from Y4M file
+static bool
+y4m_read_image(MvtImageFile *fp, MvtImage *image)
+{
+    const VideoFormatInfo * const vip = video_format_get_info(fp->info.format);
+    Token token;
+    char sep = 0;
+    bool success = false;
+
+    token_init(&token);
+    while (token_read(&token, fp->file, &sep) && sep != EOF) {
+        if (strcmp(token.str, "FRAME") == 0)
+            success = true;
+        if (sep == '\n')
+            break;
+    }
+    token_clear(&token);
+    if (!success)
+        return false;
+
+    if (!y4m_read_image_component(fp, image, vip, 0)) // Y
+        return false;
+    if (vip->num_components > 1) {
+        if (!y4m_read_image_component(fp, image, vip, 1)) // Cb
+            return false;
+        if (!y4m_read_image_component(fp, image, vip, 2)) // Cr
+            return false;
+    }
+    if (vip->num_components > 3) {
+        if (!y4m_read_image_component(fp, image, vip, 3)) // Alpha
+            return false;
+    }
+    return true;
+}
+
 static const MvtImageFileClass mvt_image_file_class_Y4M = {
     .write_header = y4m_write_header,
     .write_image = y4m_write_image,
+    .read_header = y4m_read_header,
+    .read_image = y4m_read_image,
 };
 
 /* ------------------------------------------------------------------------ */
@@ -247,6 +503,9 @@ mvt_image_file_open(const char *path, MvtImageFileMode mode)
         return NULL;
 
     switch (mode) {
+    case MVT_IMAGE_FILE_MODE_READ:
+        mode_str = "r";
+        break;
     case MVT_IMAGE_FILE_MODE_WRITE:
         mode_str = "w";
         break;
@@ -338,4 +597,65 @@ mvt_image_file_write_image(MvtImageFile *fp, MvtImage *image)
 
     klass = fp->klass;
     return klass->write_image && klass->write_image(fp, image);
+}
+
+// Reads image file headers
+bool
+mvt_image_file_read_headers(MvtImageFile *fp, MvtImageInfo *info)
+{
+    static const MvtImageFileClass *klass_list[] = {
+        &mvt_image_file_class_Y4M,
+        NULL
+    };
+
+    if (!fp || !info)
+        return false;
+
+    if (!fp->info_ready) {
+        uint32_t i;
+
+        fp->klass = NULL;
+        for (i = 0; !fp->klass && klass_list[i] != NULL; i++) {
+            const MvtImageFileClass * const klass = klass_list[i];
+
+            rewind(fp->file);
+            if (klass->read_header && klass->read_header(fp))
+                fp->klass = klass;
+        }
+        if (!fp->klass)
+            return false;
+        fp->info_ready = true;
+
+        if (fp->info.fps_n == 0 || fp->info.fps_d == 0)
+            mvt_image_info_init_default_fps(&fp->info);
+        if (fp->info.par_n == 0 || fp->info.par_d == 0)
+            mvt_image_info_init_default_par(&fp->info);
+    }
+
+    if (info)
+        *info = fp->info;
+    return true;
+}
+
+// Reads the next image stored in file
+bool
+mvt_image_file_read_image(MvtImageFile *fp, MvtImage *image)
+{
+    const MvtImageInfo *info;
+    const MvtImageFileClass *klass;
+
+    if (!fp || !image)
+        return false;
+
+    if (!fp->info_ready && !mvt_image_file_read_headers(fp, NULL))
+        return false;
+
+    info = &fp->info;
+    if (image->format != info->format ||
+        image->width  != info->width  ||
+        image->height != info->height)
+        return false;
+
+    klass = fp->klass;
+    return klass->read_image && klass->read_image(fp, image);
 }

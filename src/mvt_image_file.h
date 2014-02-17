@@ -72,6 +72,14 @@ mvt_image_file_write_headers(MvtImageFile *fp, const MvtImageInfo *info);
 bool
 mvt_image_file_write_image(MvtImageFile *fp, MvtImage *image);
 
+/** Reads the image file headers */
+bool
+mvt_image_file_read_headers(MvtImageFile *fp, MvtImageInfo *info);
+
+/** Reads the next image stored in file */
+bool
+mvt_image_file_read_image(MvtImageFile *fp, MvtImage *image);
+
 MVT_END_DECLS
 
 #endif /* MVT_IMAGE_FILE_H */
