@@ -5,7 +5,7 @@ if ENABLE_FFMPEG
 noinst_LTLIBRARIES += libdec_ffmpeg.la
 endif
 
-pkglibexec_PROGRAMS =
+pkglibexec_PROGRAMS = gen_ref_rawvideo
 if ENABLE_FFMPEG
 pkglibexec_PROGRAMS += dec_ffmpeg
 endif
@@ -176,6 +176,15 @@ dec_gstreamer_CFLAGS	= $(dec_gstreamer_cflags)
 dec_gstreamer_LDADD	= $(dec_gstreamer_libs)
 
 # -----------------------------------------------------------------------------
+# --- Raw video decoder                                                     ---
+# -----------------------------------------------------------------------------
+
+gen_ref_rawvideo_source_c	= gen_ref_rawvideo.c mvt_decoder.c
+gen_ref_rawvideo_SOURCES	= $(gen_ref_rawvideo_source_c)
+gen_ref_rawvideo_CFLAGS		= $(mvt_utils_cflags)
+gen_ref_rawvideo_LDADD		= libmvt_utils.la $(mvt_utils_libs)
+
+# -----------------------------------------------------------------------------
 # --- Reference VPx decoder (libvpx)                                        ---
 # -----------------------------------------------------------------------------
 
@@ -202,6 +211,8 @@ EXTRA_DIST = \
 	$(dec_ffmpeg_source_h)		\
 	$(dec_gstreamer_source_c)	\
 	$(dec_gstreamer_source_h)	\
+	$(gen_ref_rawvideo_source_c)	\
+	$(gen_ref_rawvideo_source_h)	\
 	$(gen_ref_vpx_source_c)		\
 	$(gen_ref_vpx_source_h)		\
 	$(NULL)
