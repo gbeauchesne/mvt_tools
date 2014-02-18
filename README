@@ -27,6 +27,7 @@ Features
   * GStreamer decoders, including VA-API support
   * Reference software decoders that use FFmpeg demuxers
     + VP8/VP9 (libvpx) decoder
+    + H.264 AVC (JM) decoder
 
 
 Requirements

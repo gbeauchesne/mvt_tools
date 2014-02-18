@@ -15,6 +15,9 @@ endif
 if ENABLE_REF_VPX
 pkglibexec_PROGRAMS += gen_ref_vpx
 endif
+if ENABLE_REF_H264
+pkglibexec_PROGRAMS += gen_ref_h264_avc
+endif
 
 # -----------------------------------------------------------------------------
 # --- MVT Utilities                                                         ---
@@ -185,6 +188,25 @@ gen_ref_rawvideo_CFLAGS		= $(mvt_utils_cflags)
 gen_ref_rawvideo_LDADD		= libmvt_utils.la $(mvt_utils_libs)
 
 # -----------------------------------------------------------------------------
+# --- Reference H.264 decoder (JM)                                          ---
+# -----------------------------------------------------------------------------
+
+JM_CFLAGS = \
+	-I$(top_srcdir)/ext/ref_h264/JM/ldecod/inc	\
+	-I$(top_srcdir)/ext/ref_h264/JM/lcommon/inc	\
+	$(NULL)
+
+JM_LIBS = \
+	$(top_builddir)/ext/ref_h264/libmvt_ref_jm.la	\
+	-lpthread -lrt					\
+	$(NULL)
+
+gen_ref_h264_avc_source_c	= gen_ref_h264_avc.c
+gen_ref_h264_avc_SOURCES	= $(gen_ref_h264_avc_source_c)
+gen_ref_h264_avc_CFLAGS		= $(JM_CFLAGS) $(libdec_ffmpeg_cflags)
+gen_ref_h264_avc_LDADD		= $(JM_LIBS) libdec_ffmpeg.la
+
+# -----------------------------------------------------------------------------
 # --- Reference VPx decoder (libvpx)                                        ---
 # -----------------------------------------------------------------------------
 
@@ -213,6 +235,8 @@ EXTRA_DIST = \
 	$(dec_gstreamer_source_h)	\
 	$(gen_ref_rawvideo_source_c)	\
 	$(gen_ref_rawvideo_source_h)	\
+	$(gen_ref_h264_avc_source_c)	\
+	$(gen_ref_h264_avc_source_h)	\
 	$(gen_ref_vpx_source_c)		\
 	$(gen_ref_vpx_source_h)		\
 	$(NULL)

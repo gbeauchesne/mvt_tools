@@ -118,6 +118,9 @@ dnl Resolve dependencies
 if test "$enable_ref_libvpx" = "yes"; then
     enable_ffmpeg="yes"
 fi
+if test "$enable_ref_h264" = "yes"; then
+    enable_ffmpeg="yes"
+fi
 
 dnl Check for tools
 AC_PROG_CC
