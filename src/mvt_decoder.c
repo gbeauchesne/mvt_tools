@@ -104,6 +104,8 @@ print_help(const char *prog)
            "    --gen-config[=PATH]");
     printf("  %-28s  define the output filename (default: <video>.raw)\n",
            "    --gen-output[=PATH]");
+    printf("  %-28s  enable benchmark mode (decode only)\n",
+           "    --benchmark");
 
     exit(EXIT_FAILURE);
 }
@@ -156,6 +158,7 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
         OPT_HWACCEL = 1000,
         OPT_VAAPI,
         OPT_GEN_CONF,
+        OPT_BENCHMARK,
     };
 
     static const struct option long_options[] = {
@@ -166,6 +169,7 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
         { "report",     required_argument,  NULL, 'r'           },
         { "gen-config", optional_argument,  NULL, OPT_GEN_CONF  },
         { "gen-output", optional_argument,  NULL, 'o'           },
+        { "benchmark",  no_argument,        NULL, OPT_BENCHMARK },
         { NULL, }
     };
 
@@ -217,6 +221,9 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
                     goto error_alloc_memory;
             }
             gen_output = true;
+            break;
+        case OPT_BENCHMARK:
+            options->benchmark = true;
             break;
         default:
             break;
@@ -303,10 +310,15 @@ mvt_decoder_run(MvtDecoder *decoder)
 bool
 mvt_decoder_handle_image(MvtDecoder *decoder, MvtImage *image, uint32_t flags)
 {
+    const MvtDecoderOptions * const options = &decoder->options;
+
     if (decoder->max_width < image->width)
         decoder->max_width = image->width;
     if (decoder->max_height < image->height)
         decoder->max_height = image->height;
+
+    if (options->benchmark)
+        goto done;
 
     if (decoder->hash && decoder->report) {
         if (!mvt_image_hash(image, decoder->hash))
@@ -337,6 +349,8 @@ mvt_decoder_handle_image(MvtDecoder *decoder, MvtImage *image, uint32_t flags)
         if (!mvt_image_file_write_image(decoder->output_file, image))
             return false;
     }
+
+done:
     decoder->num_frames++;
     return true;
 }
@@ -353,6 +367,8 @@ mvt_decoder_dump_config(MvtDecoder *decoder)
     MvtHash *hash;
     bool success = true;
 
+    if (options->benchmark)
+        return true;
     if (!options->config_filename || is_dev_null(options->config_filename))
         return true;
 

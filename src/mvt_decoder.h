@@ -59,6 +59,7 @@ typedef struct {
     char *output_filename;      ///< Output filename
     MvtHashType hash_type;      ///< Codec hash type to use
     MvtHwaccel hwaccel;         ///< Hardware acceleration mode
+    bool benchmark;             ///< Flag: benchmark mode (decode-only)
 } MvtDecoderOptions;
 
 /** Base decoder object */

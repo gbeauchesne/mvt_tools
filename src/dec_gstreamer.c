@@ -667,6 +667,9 @@ on_handoff(GstElement *element, GstBuffer *buffer, GstPad *pad, App *app)
             return FALSE;
     }
 
+    if (options->benchmark)
+        return TRUE;
+
     /* Handle the decoded buffer */
     switch (options->hwaccel) {
     case MVT_HWACCEL_NONE:
