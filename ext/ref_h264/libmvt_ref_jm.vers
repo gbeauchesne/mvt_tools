@@ -1,0 +1,10 @@
+MVT_REF_JM {
+global:
+    OpenDecoder;
+    DecodeOneFrame;
+    FinitDecoder;
+    CloseDecoder;
+    p_Dec;
+local:
+    *;
+};

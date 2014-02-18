@@ -101,6 +101,10 @@ function fetch_sources() {
         [[ "$o_hash" = "$hash" ]] || \
             fatal_error "failed to validate download ($name)"
     done << EOF
+# H.264 AVC Reference Software (JM)
+REF_H264_AVC;\
+http://iphome.hhi.de/suehring/tml/download/jm18.6.zip;\
+3bb3ce66316fd9e8ec3d26d88319a6ba
 EOF
 }
 

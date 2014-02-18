@@ -16,6 +16,7 @@ m4_define([default_builtin_ffmpeg],     [yes])
 m4_define([default_gstreamer],          [yes])
 m4_define([default_ref_libvpx],         [yes])
 m4_define([default_builtin_libvpx],     [yes])
+m4_define([default_ref_h264],           [yes])
 
 # FFmpeg version number
 m4_define([libavutil_version],          [51.22.1])
@@ -97,6 +98,11 @@ AC_ARG_ENABLE([builtin-libvpx],
                    [build built-in Libvpx module @<:@default=default_builtin_libvpx@:>@]),
     [], [enable_builtin_libvpx=default_builtin_libvpx])
 
+AC_ARG_ENABLE([ref-h264],
+    AS_HELP_STRING([--enable-ref-h264],
+        [build reference h264 decoders @<:@default=default_ref_h264@:>@]),
+    [], [enable_ref_h264=default_ref_h264])
+
 AC_ARG_WITH([renderer],
     AC_HELP_STRING([--with-renderer=API],
                    [build with the specified rendering API
@@ -117,6 +123,9 @@ dnl Check for tools
 AC_PROG_CC
 AM_PROG_CC_C_O
 AC_PROG_CXX
+
+AC_ARG_VAR([UNZIP], [Path to unzip program, if any])
+AC_PATH_PROG([UNZIP], [unzip])
 
 AC_ARG_VAR([YASM], [Path to yasm program, if any])
 AC_PATH_PROG([YASM], [yasm])
@@ -369,6 +378,15 @@ AC_DEFINE_UNQUOTED([USE_LIBVPX], [$USE_LIBVPX],
     [Defined to 1 if VPx (libvpx) reference decoder is enabled])
 AM_CONDITIONAL([ENABLE_REF_VPX], [test $USE_LIBVPX -eq 1])
 
+dnl Check for JM Reference Software
+USE_REF_H264=0
+if test "$enable_ref_h264" = "yes"; then
+    USE_REF_H264=1
+fi
+AC_DEFINE_UNQUOTED([USE_REF_H264], [$USE_REF_H264],
+    [Defined to 1 if reference H.264 decoder (JM) is enabled])
+AM_CONDITIONAL([ENABLE_REF_H264], [test $USE_REF_H264 -eq 1])
+
 dnl ---------------------------------------------------------------------------
 dnl -- Generate files and summary                                            --
 dnl ---------------------------------------------------------------------------
@@ -393,6 +411,7 @@ AC_CONFIG_FILES([
     ext/files/Makefile
     ext/libvpx/Makefile
     ext/libyuv/Makefile
+    ext/ref_h264/Makefile
     src/Makefile
 ])
 AC_OUTPUT
@@ -409,4 +428,5 @@ if test "$enable_gstreamer" = "yes"; then
 echo GStreamer API version ............ : $GST_API_VERSION
 fi
 echo Enable reference VPx decoder ..... : $enable_ref_libvpx
+echo Enable reference H.264 decoder ... : $enable_ref_h264
 echo
