@@ -80,6 +80,12 @@ get_basename(const char *filename)
     return s ? s + 1 : filename;
 }
 
+static bool
+is_dev_null(const char *filename)
+{
+    return filename && strcmp(filename, "/dev/null") == 0;
+}
+
 static void
 print_help(const char *prog)
 {
@@ -188,6 +194,8 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
         case OPT_GEN_CONF:
             free(options->config_filename);
             options->config_filename = strdup(optarg ? optarg : "-");
+            if (!options->config_filename)
+                goto error_alloc_memory;
             break;
         case '\1':
             free(options->filename);
@@ -249,15 +257,17 @@ mvt_decoder_init(MvtDecoder *decoder, int argc, char *argv[])
     if (!options->filename)
         goto error_no_filename;
 
-    decoder->report = mvt_report_new(options->report_filename);
-    if (!decoder->report)
-        goto error_init_report;
+    if (!is_dev_null(options->report_filename)) {
+        decoder->report = mvt_report_new(options->report_filename);
+        if (!decoder->report)
+            goto error_init_report;
 
-    decoder->hash = mvt_hash_new(options->hash_type);
-    if (!decoder->hash)
-        goto error_init_hash;
+        decoder->hash = mvt_hash_new(options->hash_type);
+        if (!decoder->hash)
+            goto error_init_hash;
+    }
 
-    if (options->output_filename) {
+    if (options->output_filename && !is_dev_null(options->output_filename)) {
         decoder->output_file = mvt_image_file_open(options->output_filename,
             MVT_IMAGE_FILE_MODE_WRITE);
         if (!decoder->output_file)
@@ -298,9 +308,11 @@ mvt_decoder_handle_image(MvtDecoder *decoder, MvtImage *image, uint32_t flags)
     if (decoder->max_height < image->height)
         decoder->max_height = image->height;
 
-    if (!mvt_image_hash(image, decoder->hash))
-        return false;
-    mvt_report_write_image_hash(decoder->report, image, decoder->hash);
+    if (decoder->hash && decoder->report) {
+        if (!mvt_image_hash(image, decoder->hash))
+            return false;
+        mvt_report_write_image_hash(decoder->report, image, decoder->hash);
+    }
 
     if (decoder->output_file) {
         if (decoder->num_frames == 0) {
@@ -341,7 +353,7 @@ mvt_decoder_dump_config(MvtDecoder *decoder)
     MvtHash *hash;
     bool success = true;
 
-    if (!options->config_filename)
+    if (!options->config_filename || is_dev_null(options->config_filename))
         return true;
 
     out = options->config_filename[0] == '-' ? stdout :
