@@ -43,6 +43,7 @@ mvt_utils_source_c = \
 	mvt_memory.c		\
 	mvt_messages.c		\
 	mvt_report.c		\
+	mvt_string.c		\
 	va_image_utils.c	\
 	va_utils.c		\
 	video_format.c		\
@@ -60,6 +61,7 @@ mvt_utils_source_h = \
 	mvt_memory.h		\
 	mvt_messages.h		\
 	mvt_report.h		\
+	mvt_string.h		\
 	sysdeps.h		\
 	va_compat.h		\
 	va_image_utils.h	\
