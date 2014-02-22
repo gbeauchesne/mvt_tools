@@ -12,10 +12,10 @@ m4_append([mvt_version], mvt_pre_version, [.pre])
 # Configure defaults
 m4_define([default_renderer],           [drm])
 m4_define([default_ffmpeg],             [yes])
-m4_define([default_builtin_ffmpeg],     [no])
+m4_define([default_builtin_ffmpeg],     [yes])
 m4_define([default_gstreamer],          [yes])
 m4_define([default_ref_libvpx],         [yes])
-m4_define([default_builtin_libvpx],     [no])
+m4_define([default_builtin_libvpx],     [yes])
 
 # FFmpeg version number
 m4_define([libavutil_version],          [51.22.1])
