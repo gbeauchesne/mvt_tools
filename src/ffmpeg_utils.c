@@ -49,8 +49,14 @@ ffmpeg_to_mvt_video_format(enum AVPixelFormat pix_fmt, VideoFormat *format_ptr)
     case AV_PIX_FMT_YUV420P10:
         format = VIDEO_FORMAT_I420P10;
         break;
+    case AV_PIX_FMT_YUV422P:
+        format = VIDEO_FORMAT_I422;
+        break;
     case AV_PIX_FMT_YUV422P10:
         format = VIDEO_FORMAT_I422P10;
+        break;
+    case AV_PIX_FMT_YUV444P:
+        format = VIDEO_FORMAT_I444;
         break;
     case AV_PIX_FMT_YUV444P10:
         format = VIDEO_FORMAT_I444P10;

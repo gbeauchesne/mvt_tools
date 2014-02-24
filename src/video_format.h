@@ -88,6 +88,10 @@ typedef enum {
     VIDEO_FORMAT_I444P12,
     /** Planar YUV 4:4:4, 48-bit, 3 planes for Y U V, 16 bits per sample */
     VIDEO_FORMAT_I444P16,
+    /** Planar YUV 4:2:2, 16-bit, 3 planes for Y U V */
+    VIDEO_FORMAT_I422,
+    /** Planar YUV 4:4:4, 24-bit, 3 planes for Y U V */
+    VIDEO_FORMAT_I444,
     /** Number of video formats */
     VIDEO_FORMAT_COUNT,
 

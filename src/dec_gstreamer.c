@@ -196,6 +196,58 @@ parse_codec_caps(GstCaps *caps, MvtCodec *codec_ptr, int *profile_ptr)
     return codec != 0;
 }
 
+// Translates GstVideoFormat to MVT video format
+static bool
+gst_to_mvt_video_format(GstVideoFormat format, VideoFormat *out_format_ptr)
+{
+    VideoFormat out_format;
+
+    switch (format) {
+    case GST_VIDEO_FORMAT_I420:
+        out_format = VIDEO_FORMAT_I420;
+        break;
+    case GST_VIDEO_FORMAT_Y42B:
+        out_format = VIDEO_FORMAT_I422;
+        break;
+    case GST_VIDEO_FORMAT_Y444:
+        out_format = VIDEO_FORMAT_I444;
+        break;
+    case GST_VIDEO_FORMAT_YV12:
+        out_format = VIDEO_FORMAT_YV12;
+        break;
+    case GST_VIDEO_FORMAT_NV12:
+        out_format = VIDEO_FORMAT_NV12;
+        break;
+    case GST_VIDEO_FORMAT_YUY2:
+        out_format = VIDEO_FORMAT_YUY2;
+        break;
+    case GST_VIDEO_FORMAT_UYVY:
+        out_format = VIDEO_FORMAT_UYVY;
+        break;
+    case GST_VIDEO_FORMAT_AYUV:
+        out_format = VIDEO_FORMAT_AYUV;
+        break;
+    case GST_VIDEO_FORMAT_NE(I420_10):
+        out_format = VIDEO_FORMAT_I420P10;
+        break;
+    case GST_VIDEO_FORMAT_NE(I422_10):
+        out_format = VIDEO_FORMAT_I422P10;
+        break;
+    case GST_VIDEO_FORMAT_NE(Y444_10):
+        out_format = VIDEO_FORMAT_I444P10;
+        break;
+    default:
+        out_format = VIDEO_FORMAT_UNKNOWN;
+        break;
+    }
+    if (!out_format)
+        return false;
+
+    if (out_format_ptr)
+        *out_format_ptr = out_format;
+    return true;
+}
+
 /* ------------------------------------------------------------------------ */
 /* --- GStreamer based decoder                                          --- */
 /* ------------------------------------------------------------------------ */
@@ -388,39 +440,9 @@ app_handle_sw_surface(App *app, GstBuffer *buffer,
     uint32_t i;
     gboolean success;
 
-    switch (GST_VIDEO_INFO_FORMAT(&app->vinfo)) {
-    case GST_VIDEO_FORMAT_I420:
-        format = VIDEO_FORMAT_I420;
-        break;
-    case GST_VIDEO_FORMAT_YV12:
-        format = VIDEO_FORMAT_YV12;
-        break;
-    case GST_VIDEO_FORMAT_NV12:
-        format = VIDEO_FORMAT_NV12;
-        break;
-    case GST_VIDEO_FORMAT_YUY2:
-        format = VIDEO_FORMAT_YUY2;
-        break;
-    case GST_VIDEO_FORMAT_UYVY:
-        format = VIDEO_FORMAT_UYVY;
-        break;
-    case GST_VIDEO_FORMAT_AYUV:
-        format = VIDEO_FORMAT_AYUV;
-        break;
-    case GST_VIDEO_FORMAT_NE(I420_10):
-        format = VIDEO_FORMAT_I420P10;
-        break;
-    case GST_VIDEO_FORMAT_NE(I422_10):
-        format = VIDEO_FORMAT_I422P10;
-        break;
-    case GST_VIDEO_FORMAT_NE(Y444_10):
-        format = VIDEO_FORMAT_I444P10;
-        break;
-    default:
-        format = VIDEO_FORMAT_UNKNOWN;
-        break;
-    }
-    if (!format || !(va_format = video_format_to_va_format(format)))
+    if (!gst_to_mvt_video_format(GST_VIDEO_INFO_FORMAT(&app->vinfo), &format))
+        goto error_unsupported_format;
+    if (!(va_format = video_format_to_va_format(format)))
         goto error_unsupported_format;
 
     va_image_init_defaults(&va_image);
