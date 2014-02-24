@@ -431,7 +431,7 @@ init_input_params(Decoder *decoder)
 
     params->FileFormat = PAR_OF_ANNEXB;
     params->poc_scale = 2;
-    params->write_uv = 1;
+    params->write_uv = 0; /* don't write chroma components for grayscale */
     params->silent = 1;
 
     params->conceal_mode = 0;
