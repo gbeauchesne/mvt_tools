@@ -1,5 +1,11 @@
-Media Validation Tools (MVT) NEWS -- summary of changes.  2014-02-14
+Media Validation Tools (MVT) NEWS -- summary of changes.  2014-02-18
 Copyright (C) 2013-2014 Intel Corporation
+
+Version 0.2.0 - 18.Feb.2014
+* Add support for high bit depts (>8-bit)
+* Add JM Reference Software version 18.6 (H.264 AVC decoder)
+* Add --benchmark option to disable hashing and download of VA surfaces
+* Add --gen-output option to save the raw decoded frames into Y4M format
 
 Version 0.1.0 - 14.Feb.2014
 * Initial release
