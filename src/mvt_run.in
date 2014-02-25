@@ -59,6 +59,7 @@ Options:
   -h, --help                  display this help and exit
       --decoder=DECODER       define the decoder to run [$DEFAULT_DECODER]
       --hwaccel=MODE          define the hardware acceleration mode [$DEFAULT_HWACCEL]
+      --gen-rawvideo          generate raw video (YUV in Y4M format) [no]
 
 Package options:
   -p, --plugindir=DIR         location of MVT modules [$DEFAULT_PLUGINS_ROOT]
@@ -73,6 +74,7 @@ testdir="$DEFAULT_TESTS_ROOT"
 inputdir="$DEFAULT_TESTS_ROOT"
 arg_decoder="$DEFAULT_DECODER"
 opt_hwaccel="$DEFAULT_HWACCEL"
+gen_rawvideo="no"
 while getopts ":he:p:t:i:o:-:" optchar "$@"; do
     case "$optchar" in
         (h)                     print_help; exit 1;;
@@ -87,6 +89,7 @@ while getopts ":he:p:t:i:o:-:" optchar "$@"; do
             case "$OPTARG" in
                 (help)          print_help; exit 1;;
                 (vaapi)         opt_hwaccel="vaapi";;
+                (gen-rawvideo)  gen_rawvideo="yes";;
                 (decoder=*)     arg_decoder="$optval";;
                 (hwaccel=*)     opt_hwaccel="$optval";;
                 (plugindir=*)   plugindir="$optval";;
@@ -286,9 +289,13 @@ function run_test() {
     local reffile="${conffile%%.conf}.ref"
     cp "$reffile" "$outdir/test.ref"
 
+    local opt_gen_rawvideo=""
+    [[ "$gen_rawvideo" = "yes" ]] && \
+        opt_gen_rawvideo="--gen-output=$outdir/test.out.y4m"
+
     printf "${test_name_format}" $test_name
     local test_result="FAIL"
-    $cmd_decoder                                \
+    $cmd_decoder "$opt_gen_rawvideo"            \
         --hwaccel=$opt_hwaccel                  \
         -c $CODEC_HASH                          \
         -r "$outdir/test.out"                   \
