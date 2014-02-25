@@ -417,6 +417,7 @@ AC_CONFIG_FILES([
     ext/ref_h264/Makefile
     src/Makefile
 ])
+AC_CONFIG_FILES([src/mvt_run], [chmod +x src/mvt_run])
 AC_OUTPUT
 
 dnl Print summary

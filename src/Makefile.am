@@ -1,3 +1,5 @@
+bin_SCRIPTS = mvt_run
+
 lib_LTLIBRARIES = libmvt_utils.la
 
 noinst_LTLIBRARIES =
@@ -240,6 +242,8 @@ EXTRA_DIST = \
 	$(gen_ref_vpx_source_c)		\
 	$(gen_ref_vpx_source_h)		\
 	$(NULL)
+
+CLEANFILES = $(bin_SCRIPTS)
 
 # Extra clean files so that maintainer-clean removes *everything*
 MAINTAINERCLEANFILES = Makefile.in

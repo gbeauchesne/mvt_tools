@@ -1,0 +1,359 @@
+#!/bin/bash
+#
+# Copyright (C) 2014 Intel Corporation
+#   Author: Gwenole Beauchesne <gwenole.beauchesne@intel.com>
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public License
+# as published by the Free Software Foundation; either version 2.1
+# of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free
+# Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+# Boston, MA 02110-1301 
+
+shopt -s extglob
+prog="$0"
+progname="${prog##*/}"
+prefix="@prefix@"
+exec_prefix="@exec_prefix@"
+
+PCI_DEVICES_ROOT="/sys/bus/pci/devices"
+
+DEFAULT_PLUGINS_ROOT="@libexecdir@/mvt"
+DEFAULT_TESTS_ROOT="@datarootdir@/mvt"
+
+# Default decoder command. Override with --decoder=* argument
+DEFAULT_DECODER="dec_gstreamer"
+
+# Default hardware acceleration mode. Override with --hwaccel=* argument
+DEFAULT_HWACCEL="none"
+
+# Message logging utilities
+function log_message() {
+    local out="$1" category="$2"
+    shift 2
+    echo $category: ${1+"$@"} >>$out
+}
+
+function warning()      { log_message /dev/stdout warning ${1+"$@"}; }
+function error()        { log_message /dev/stderr error ${1+"$@"}; }
+function fatal_error()  { error ${1+"$@"}; exit 1; }
+
+# Process command line arguments
+function illegal_option() {
+    fatal_error "illegal option $1"
+}
+
+function print_help() {
+    cat << EOF
+Usage: $prog [<options>]* [<testdir>]*
+
+Options:
+  -h, --help                  display this help and exit
+      --decoder=DECODER       define the decoder to run [$DEFAULT_DECODER]
+      --hwaccel=MODE          define the hardware acceleration mode [$DEFAULT_HWACCEL]
+
+Package options:
+  -p, --plugindir=DIR         location of MVT modules [$DEFAULT_PLUGINS_ROOT]
+  -t, --testdir=DIR           location of MVT testsuite [$DEFAULT_TESTS_ROOT]
+  -i, --inputdir=DIR          location of MVT testsuite source data [$DEFAULT_TESTS_ROOT]
+  -o, --outputdir=DIR         location of MVT testsuite results []
+EOF
+}
+
+plugindir="$DEFAULT_PLUGINS_ROOT"
+testdir="$DEFAULT_TESTS_ROOT"
+inputdir="$DEFAULT_TESTS_ROOT"
+arg_decoder="$DEFAULT_DECODER"
+opt_hwaccel="$DEFAULT_HWACCEL"
+while getopts ":he:p:t:i:o:-:" optchar "$@"; do
+    case "$optchar" in
+        (h)                     print_help; exit 1;;
+        (p)                     plugindir="$OPTARG";;
+        (t)                     testdir="$OPTARG";;
+        (i)                     inputdir="$OPTARG";;
+        (o)                     outputdir="$OPTARG";;
+        (\?)                    illegal_option "-$OPTARG";;
+        (-)
+            optval=${OPTARG#*=}
+            optvar=${OPTARG%=$optval}
+            case "$OPTARG" in
+                (help)          print_help; exit 1;;
+                (vaapi)         opt_hwaccel="vaapi";;
+                (decoder=*)     arg_decoder="$optval";;
+                (hwaccel=*)     opt_hwaccel="$optval";;
+                (plugindir=*)   plugindir="$optval";;
+                (testdir=*)     testdir="$optval";;
+                (input=*)       input="$optval";;
+                (outputdir=*)   outputdir="$optval";;
+                (*=*)           illegal_option "--$optvar=$optval";;
+                (*)             illegal_option "--$optvar";;
+            esac
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
+# Determines the absolute path of the supplied directory
+function get_abs_path() {
+    local f="$1"
+
+    [[ -f "$f" ]] && \
+        { echo $(cd $(dirname $f) && pwd)/${f##*/}; return 0; }
+    [[ -d "$f" ]] && \
+        { echo $(cd $f && pwd); return 0; }
+    echo $f
+}
+
+# Determines the absolute path of the supplied module
+function cmd_get_path() {
+    local dir="$1" cmd="$2" prefix="$3"
+
+    [[ -x "$cmd" ]] && \
+        { get_abs_path "$cmd"; return 0; }
+    [[ -x "$dir/$cmd" ]] && \
+        { echo "$dir/$cmd"; return 0; }
+    [[ -n "$prefix" ]] && [[ -x "$dir/${prefix}_$cmd" ]] && \
+        { echo "$dir/${prefix}_$cmd"; return 0; }
+    return 1
+}
+
+# Sanity checks
+[[ -d "$PCI_DEVICES_ROOT" ]] || \
+    fatal_error "failed to locate root PCI devices dir"
+
+[[ -n "$inputdir" ]] || inputdir="$testdir"
+[[ -d "$inputdir" ]] || \
+    fatal_error "failed to locate source data directory \`$inputdir'"
+
+if [[ -n "$outputdir" ]]; then
+    mkdir -p "$outputdir" 2>/dev/null || \
+        fatal_error "failed to create output directory \`$outputdir'"
+else
+    outputdir=$(mktemp --tmpdir -d mvt_run.XXXXXX)
+    outputdir_temp="yes"
+fi
+
+[[ -d "$plugindir" ]] || \
+    fatal_error "failed to locate root modules dir"
+plugindir=$(get_abs_path $plugindir)
+
+cmd_decoder=$(cmd_get_path $plugindir $arg_decoder "dec")
+[[ -n "$cmd_decoder" ]] || \
+    fatal_error "failed to locate decoder module \`$arg_decoder'"
+
+# Determines the graphics device path (PCI)
+function gfx_get_device_path() {
+    local devices_root="$PCI_DEVICES_ROOT"
+
+    pushd $devices_root >/dev/null || exit
+    for d in *:*:*.*; do
+        local pci_class=$(< $d/class)
+        [[ "$pci_class" = "0x030000" ]] && { echo "$devices_root/$d"; break; }
+    done
+    popd >/dev/null
+}
+
+# Determines the graphics device code
+function gfx_get_device() {
+    local device_id="$1"
+
+    case "${device_id,,}" in
+        (0x01[012][26]|0x010a)  echo "SNB";; # Gen6
+        (0x01[56][26a])         echo "IVB";; # Gen7
+        (0x0f3[0-3]|0x015[57])  echo "BYT";; # Gen7
+        (0x0[4da]*)             echo "HSW";; # Gen7.5
+        (0x16[0-3][26bade])     echo "BDW";; # Gen8
+        (0x22b[0-3])            echo "CHV";; # Gen8LP
+        (0x19[02]4|0x192[046])  echo "SKL";; # Gen9
+        (0x1910)                echo "SKL";; # Gen9
+        (0x0a8[4-7])            echo "BXT";; # Gen9LP
+    esac
+}
+
+# Determines the graphics device name
+function gfx_get_device_name() {
+    local device="$1"
+
+    case "${device^^}" in
+        (SNB) echo "Sandybridge";;
+        (IVB) echo "Ivybridge";;
+        (BYT) echo "Baytrail";;
+        (HSW) echo "Haswell";;
+        (BDW) echo "Broadwell";;
+        (CHV) echo "Cherryview";;
+        (SKL) echo "Skylake";;
+        (BXT) echo "Broxton";;
+        (CNL) echo "Cannonlake";;
+        (OWF) echo "Owenfield";;
+        (*)   echo "<$device>";;
+    esac
+}
+
+pci_device=$(< "$(gfx_get_device_path)/device")
+gfx_device=$(gfx_get_device $pci_device)
+[[ -n "$gfx_device" ]] || \
+    fatal_error "failed to identify graphics device id $pci_device"
+
+# Determines whether the graphics device supports the supplied codec
+function gfx_has_codec() {
+    local gfx_device="$1" codec="$2" profile="$3"
+    local no_jpeg_pattern="SNB"
+    local no_hevc_pattern="SNB|IVB|BYT|HSW|BDW"
+    local no_hevc_10b_pattern="$no_hevc_pattern|CHV|SKL|BXT"
+    local no_vp8_pattern="SNB|IVB|HSW"
+    local no_vp9_pattern="SNB|IVB|BYT|HSW|BDW|CHV|SKL"
+
+    case "${gfx_device^^}:${codec,,}:${profile,,}" in
+        (@($no_jpeg_pattern):jpeg:*)            return 1;; # JPEG
+        (*:jpeg:)                               return 0;;
+        (*:jpeg:baseline)                       return 0;;
+        (*:mpeg2:)                              return 0;; # MPEG-2
+        (*:mpeg2:simple)                        return 0;;
+        (*:mpeg2:main)                          return 0;;
+        (*:vc1:)                                return 0;; # VC-1
+        (*:vc1:simple)                          return 0;;
+        (*:vc1:main)                            return 0;;
+        (*:vc1:advanced)                        return 0;;
+        (*:h264:)                               return 0;; # H.264
+        (*:h264:constrained-baseline)           return 0;;
+        (*:h264:main)                           return 0;;
+        (*:h264:high)                           return 0;;
+        (@($no_hevc_pattern):hevc:*)            return 1;; # HEVC
+        (*:hevc:)                               return 0;;
+        (*:hevc:main)                           return 0;;
+        (@($no_hevc_10b_pattern):hevc:main-10)  return 1;;
+        (*:hevc:main-10)                        return 0;;
+        (@($no_vp8_pattern):vp8:*)              return 1;; # VP8
+        (*:vp8:)                                return 0;;
+        (@($no_vp9_pattern):vp9:*)              return 1;; # VP9
+        (*:vp9:)                                return 0;;
+    esac
+    return 1
+}
+
+N_TESTS=0
+N_TESTS_PASSED=0
+N_TESTS_SKIPPED=0
+
+# Locates the source video file
+function get_test_file() {
+    local out_var="$1" name="$2" __file=""
+
+    [[ -n "$GET_TEST_FILE_CACHE" ]] && \
+        __file=$(find $GET_TEST_FILE_CACHE/ -type f -name "$name" -print -quit)
+    [[ -z "$__file" ]] && \
+        __file=$(find $inputdir/ -type f -name "$name" -print -quit)
+    [[ -z "$__file" ]] && return 1
+
+    GET_TEST_FILE_CACHE=$(dirname $__file)
+    eval $out_var="'$__file'"
+    return 0
+}
+
+# Executes the supplied test config
+function run_test() {
+    local conffile=$(get_abs_path "$1") base_conffile=${1##*/} t
+    local FILE FILE_URL FILE_HASH
+    local CODEC CODEC_PROFILE CODEC_HASH CODEC_MAX_WIDTH CODEC_MAX_HEIGHT
+
+    ((N_TESTS++))
+    local id=$(printf "%05d" $N_TESTS)
+    local test_name="$id.${base_conffile%%.conf}"
+    local test_name_format="%-60s"
+    local outdir="$outputdir/$test_name"
+    mkdir -p $outdir
+
+    local logfile="$outdir/test.log"
+    echo "X-Test-Config: $conffile" > $logfile
+
+    . $conffile
+
+    # Make sure the necessary tags are defined
+    for tag in FILE FILE_HASH CODEC CODEC_HASH CODEC_MAX_WIDTH CODEC_MAX_HEIGHT; do
+        eval t=\$$tag
+        [[ -n "$t" ]] || {
+            log_message $logfile "error" "no $tag tag defined"
+            ((N_TESTS_SKIPPED++)); return 0
+        }
+    done
+
+    # If testing with hardware acceleration, check the platform supports codec
+    [[ "$opt_hwaccel" != "none" ]] && \
+        ! gfx_has_codec $gfx_device $CODEC $CODEC_PROFILE &&
+    {
+        log_message $logfile "info" "unsupported codec ($CODEC/$CODEC_PROFILE)"
+        ((N_TESTS_SKIPPED++)); return 0
+    }
+
+    # Locate the video file
+    local file=""
+    get_test_file file "$FILE" || {
+        log_message $logfile "error" "failed to locate source file \`$FILE'"
+        ((N_TESTS_SKIPPED++)); return 0
+    }
+    echo "X-Test-Data: $file" >> $logfile
+
+    local reffile="${conffile%%.conf}.ref"
+    cp "$reffile" "$outdir/test.ref"
+
+    printf "${test_name_format}" $test_name
+    local test_result="FAIL"
+    $cmd_decoder                                \
+        --hwaccel=$opt_hwaccel                  \
+        -c $CODEC_HASH                          \
+        -r "$outdir/test.out"                   \
+        $file >> $logfile 2>&1 && 
+    diff -u "$outdir/test.out" "$outdir/test.ref" >"$outdir/test.diff" && {
+        test_result="PASS"
+        ((N_TESTS_PASSED++))
+    }
+    echo "X-Test-Result: $test_result" >> $logfile
+    echo "$test_result"
+    printf "${test_name_format}%s\n" $test_name $test_result >> $TEST_LOGFILE
+}
+
+# Executes tests in the supplied directory
+function run_tests() {
+    local dir="$1"
+
+    while read f; do
+        run_test "$f"
+    done < <(find $dir/ -name "*.conf" -type f -print)
+}
+
+TEST_LOGFILE=$outputdir/summary.txt
+echo "Media Validation Tools (version @VERSION@)" > $TEST_LOGFILE
+echo >> $TEST_LOGFILE
+echo "Decoder: $cmd_decoder" >> $TEST_LOGFILE
+[[ "$opt_hwaccel" != "none" ]] &&
+echo "Hardware acceleration mode \`$opt_hwaccel' enabled on " \
+    $(gfx_get_device_name $gfx_device) >> $TEST_LOGFILE
+echo >> $TEST_LOGFILE
+cat $TEST_LOGFILE
+
+if [[ $# -eq 0 ]]; then
+    run_tests $testdir
+else
+    for arg in "$@"; do
+        if [[ -f "$arg" ]]; then
+            run_test $arg
+        elif [[ -d "$arg" ]]; then
+            run_tests $arg
+        fi
+    done
+fi
+
+n_tests=$((N_TESTS - N_TESTS_SKIPPED))
+pass_rate=$(bc <<< "if ($n_tests > 0) 100 * $N_TESTS_PASSED / $n_tests else 0")
+printf "\nSummary: %d tests run. Passed: %d (%.2f%%)\n" \
+    $n_tests $N_TESTS_PASSED $pass_rate | tee -a $TEST_LOGFILE
+
+[[ -n "$outputdir_temp" ]] && rm -rf "$outputdir"
