@@ -46,6 +46,10 @@ function warning()      { log_message /dev/stdout warning ${1+"$@"}; }
 function error()        { log_message /dev/stderr error ${1+"$@"}; }
 function fatal_error()  { error ${1+"$@"}; exit 1; }
 
+# Array utilities
+function array_decl()   { eval "${1}=() ${1}_size=0"; }
+function array_append() { eval "${1}[\$((${1}_size++))]"="$2"; }
+
 # Process command line arguments
 function illegal_option() {
     fatal_error "illegal option $1"
@@ -60,6 +64,7 @@ Options:
       --decoder=DECODER       define the decoder to run [$DEFAULT_DECODER]
       --hwaccel=MODE          define the hardware acceleration mode [$DEFAULT_HWACCEL]
       --gen-rawvideo          generate raw video (YUV in Y4M format) [no]
+  -x, --exclude=GLOB          exclude test configurations matching GLOB
 
 Package options:
   -p, --plugindir=DIR         location of MVT modules [$DEFAULT_PLUGINS_ROOT]
@@ -75,13 +80,15 @@ inputdir="$DEFAULT_TESTS_ROOT"
 arg_decoder="$DEFAULT_DECODER"
 opt_hwaccel="$DEFAULT_HWACCEL"
 gen_rawvideo="no"
-while getopts ":he:p:t:i:o:-:" optchar "$@"; do
+array_decl exclude_globs
+while getopts ":he:p:t:i:o:x:-:" optchar "$@"; do
     case "$optchar" in
         (h)                     print_help; exit 1;;
         (p)                     plugindir="$OPTARG";;
         (t)                     testdir="$OPTARG";;
         (i)                     inputdir="$OPTARG";;
         (o)                     outputdir="$OPTARG";;
+        (x)                     array_append exclude_globs "$OPTARG";;
         (\?)                    illegal_option "-$OPTARG";;
         (-)
             optval=${OPTARG#*=}
@@ -96,6 +103,7 @@ while getopts ":he:p:t:i:o:-:" optchar "$@"; do
                 (testdir=*)     testdir="$optval";;
                 (input=*)       input="$optval";;
                 (outputdir=*)   outputdir="$optval";;
+                (exclude=*)     array_append exclude_globs "$optval";;
                 (*=*)           illegal_option "--$optvar=$optval";;
                 (*)             illegal_option "--$optvar";;
             esac
@@ -228,6 +236,18 @@ N_TESTS=0
 N_TESTS_PASSED=0
 N_TESTS_SKIPPED=0
 
+# Checks whether the supplied path matches one of the exclusion patterns
+function match_exclude_globs() {
+    local path="$1"
+
+    for ((i = 0; i < $exclude_globs_size; i++)); do
+        case "$path" in
+            (${exclude_globs[$i]}) return 0;;
+        esac
+    done
+    return 1
+}
+
 # Locates the source video file
 function get_test_file() {
     local out_var="$1" name="$2" __file=""
@@ -253,6 +273,8 @@ function run_test() {
     local conffile=$(get_abs_path "$1") base_conffile=${1##*/} t
     local FILE FILE_URL FILE_HASH
     local CODEC CODEC_PROFILE CODEC_HASH CODEC_MAX_WIDTH CODEC_MAX_HEIGHT
+
+    match_exclude_globs $conffile && return 0
 
     ((N_TESTS++))
     local id=$(printf "%05d" $N_TESTS)
@@ -321,6 +343,7 @@ function run_tests() {
     local dir="$1"
 
     while read f; do
+        match_exclude_globs "$f" && continue
         run_test "$f"
     done < <(find $dir/ -name "*.conf" -type f -print)
 }
