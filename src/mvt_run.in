@@ -231,6 +231,39 @@ function gfx_has_codec() {
     return 1
 }
 
+# Determines whether the HW decoder supports the specified encoded video size
+function gfx_has_coded_size() {
+    local gfx_device="$1" codec="$2" width="$3" height="$4"
+    local mb_width=$(((width + 15) / 16)) mb_height=$(((height + 15) / 16))
+
+    # Surface size
+    case "${codec,,}" in
+        (jpeg|mpeg2|vc1|h264|vp8)       # MFX_SURFACE_STATE
+            (($width <= 16384 && $height <= 16384)) || return 1
+            ;;
+    esac
+
+    # Coded size
+    case "${gfx_device^^}:${codec,,}" in
+        (*:jpeg)                        # MFX_JPEG_PIC_STATE
+            (($width <= 65536 && $height <= 65536)) || return 1
+            ;;
+        (*:mpeg2)                       # MFX_MPEG2_PIC_STATE
+            (($mb_width <= 256 && $mb_height <= 256)) || return 1
+            ;;
+        (*:h264)                        # MFX_AVC_PIC_STATE
+            (($mb_width <= 256 && $mb_height <= 256)) || return 1
+            (($mb_width == $mb_height && $mb_width == 256)) && return 1
+            ;;
+        (*:vc1)                         # MFX_VC1_LONG_PIC_STATE
+            (($mb_width <= 255 && $mb_height <= 255)) || return 1
+            ;;
+        (*:vp8)                         # MFX_VP8_PIC_STATE
+            (($mb_width <= 256 && $mb_height <= 256)) || return 1
+            ;;
+    esac
+    return 0
+}
 
 N_TESTS=0
 N_TESTS_PASSED=0
@@ -302,6 +335,16 @@ function run_test() {
         ! gfx_has_codec $gfx_device $CODEC $CODEC_PROFILE &&
     {
         log_message $logfile "info" "unsupported codec ($CODEC/$CODEC_PROFILE)"
+        ((N_TESTS_SKIPPED++)); return 0
+    }
+
+    # Also check the hardware would support the encoded video size
+    [[ "$opt_hwaccel" != "none" ]] && \
+        ! gfx_has_coded_size $gfx_device $CODEC \
+            $CODEC_MAX_WIDTH $CODEC_MAX_HEIGHT &&
+    {
+        log_message $logfile "info" \
+            "unsupported encoded size (${CODEC_MAX_WIDTH}x${CODEC_MAX_HEIGHT})"
         ((N_TESTS_SKIPPED++)); return 0
     }
 
