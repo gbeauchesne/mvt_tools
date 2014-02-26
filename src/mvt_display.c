@@ -227,6 +227,7 @@ mvt_display_free(MvtDisplay *display)
     if (!display)
         return;
     display_finalize(display);
+    free(display);
 }
 
 // Releases MvtDisplay object and resets the supplied pointer to NULL
