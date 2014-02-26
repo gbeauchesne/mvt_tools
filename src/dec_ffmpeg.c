@@ -318,6 +318,7 @@ vaapi_get_buffer(AVCodecContext *avctx, AVFrame *frame)
     frame->data[0] = (uint8_t *)(uintptr_t)va_surface;
     frame->data[3] = (uint8_t *)(uintptr_t)va_surface;
     memset(frame->linesize, 0, sizeof(frame->linesize));
+    frame->linesize[0] = avctx->coded_width; /* XXX: 8-bit per sample only */
     return 0;
 }
 
@@ -406,9 +407,11 @@ decoder_vaapi_handle_frame(Decoder *decoder, AVFrame *frame)
 {
     struct vaapi_context * const vactx = &decoder->va_context;
     const VASurfaceID va_surface = (uintptr_t)frame->data[3];
-    MvtImage dst_image;
+    MvtImage dst_image, src_image;
     VAImage va_image;
     VAStatus va_status;
+    VARectangle crop_rect;
+    int data_offset;
     bool success;
 
     if (frame->format != AV_PIX_FMT_VAAPI_VLD)
@@ -418,8 +421,16 @@ decoder_vaapi_handle_frame(Decoder *decoder, AVFrame *frame)
     if (!va_check_status(va_status, "vaDeriveImage()"))
         return false;
 
-    if (!va_map_image(vactx->display, &va_image, &dst_image))
+    if (!va_map_image(vactx->display, &va_image, &src_image))
         goto error_unsupported_image;
+
+    data_offset = frame->data[0] - frame->data[3];
+    crop_rect.x = data_offset % frame->linesize[0];
+    crop_rect.y = data_offset / frame->linesize[0];
+    crop_rect.width = frame->width;
+    crop_rect.height = frame->height;
+    if (!mvt_image_init_from_subimage(&dst_image, &src_image, &crop_rect))
+        goto error_crop_image;
 
     if (!decoder->image || (decoder->image->width != dst_image.width ||
             decoder->image->height != dst_image.height)) {
@@ -434,7 +445,8 @@ decoder_vaapi_handle_frame(Decoder *decoder, AVFrame *frame)
         goto error_download_image;
 
     success = mvt_decoder_handle_image(MVT_DECODER(decoder), decoder->image, 0);
-    va_unmap_image(vactx->display, &va_image, &dst_image);
+    mvt_image_clear(&dst_image);
+    va_unmap_image(vactx->display, &va_image, &src_image);
     vaDestroyImage(vactx->display, va_image.image_id);
     return success;
 
@@ -446,9 +458,16 @@ error_unsupported_image:
     mvt_error("unsupported surface format (%.4s)", &va_image.format.fourcc);
     vaDestroyImage(vactx->display, va_image.image_id);
     return false;
+error_crop_image:
+    mvt_error("failed to crop VA surface to (%d,%d):%ux%u",
+        crop_rect.x, crop_rect.y, crop_rect.width, crop_rect.height);
+    va_unmap_image(vactx->display, &va_image, &src_image);
+    vaDestroyImage(vactx->display, va_image.image_id);
+    return false;
 error_download_image:
     mvt_error("failed to download VA surface 0x%08x to I420 image", va_surface);
-    va_unmap_image(vactx->display, &va_image, &dst_image);
+    mvt_image_clear(&dst_image);
+    va_unmap_image(vactx->display, &va_image, &src_image);
     vaDestroyImage(vactx->display, va_image.image_id);
     return false;
 }
