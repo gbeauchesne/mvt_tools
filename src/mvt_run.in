@@ -243,6 +243,11 @@ function get_test_file() {
     return 0
 }
 
+# Terminal color codes
+vt_color_default="\e[0;m"
+vt_color_green="\e[0;32m"
+vt_color_red="\e[0;31m"
+
 # Executes the supplied test config
 function run_test() {
     local conffile=$(get_abs_path "$1") base_conffile=${1##*/} t
@@ -295,6 +300,7 @@ function run_test() {
 
     printf "${test_name_format}" $test_name
     local test_result="FAIL"
+    local test_result_color="$vt_color_red"
     $cmd_decoder "$opt_gen_rawvideo"            \
         --hwaccel=$opt_hwaccel                  \
         -c $CODEC_HASH                          \
@@ -302,10 +308,11 @@ function run_test() {
         $file >> $logfile 2>&1 && 
     diff -u "$outdir/test.out" "$outdir/test.ref" >"$outdir/test.diff" && {
         test_result="PASS"
+        test_result_color="$vt_color_green"
         ((N_TESTS_PASSED++))
     }
     echo "X-Test-Result: $test_result" >> $logfile
-    echo "$test_result"
+    echo -e "${test_result_color}${test_result}${vt_color_default}"
     printf "${test_name_format}%s\n" $test_name $test_result >> $TEST_LOGFILE
 }
 
