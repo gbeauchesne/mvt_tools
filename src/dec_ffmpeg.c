@@ -206,7 +206,7 @@ vaapi_init_decoder(Decoder *decoder, VAProfile profile, VAEntrypoint entrypoint)
     if (!va_check_status(va_status, "vaCreateConfig()"))
         return false;
 
-    static const int SCRATCH_SURFACES = 2;
+    static const int SCRATCH_SURFACES = 4;
     if (!vaapi_ensure_surfaces(decoder, avctx->refs + 1 + SCRATCH_SURFACES))
         goto error_cleanup;
 
