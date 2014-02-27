@@ -28,6 +28,8 @@ struct MvtImagePrivate_s {
     uint8_t *           data_base;      ///< Base memory buffer (allocated)
     uint8_t *           copy_cache;     ///< Cache buffer used for image copies
     uint32_t            copy_cache_size; ///< Size of the cache buffer
+    uint8_t *           hash_data;      ///< Private hash data
+    uint32_t            hash_data_size; ///< Size of the private hash data
 };
 
 // Ensures private image data is allocated

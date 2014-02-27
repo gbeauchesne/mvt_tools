@@ -21,8 +21,10 @@
  */
 
 #include "sysdeps.h"
+#include <wchar.h>
 #include "mvt_image.h"
 #include "mvt_image_priv.h"
+#include "mvt_memory.h"
 
 // Updates the checksum for the specified component
 static void
@@ -59,6 +61,56 @@ mvt_image_hash_component(MvtImage *image, MvtHash *hash,
     }
 }
 
+// Hashes grayscale images as if they were 4:2:0 with 0.0 chroma
+static bool
+mvt_image_hash_grayscale(MvtImage *image, MvtHash *hash,
+    const VideoFormatInfo *vip)
+{
+    MvtImagePrivate * const priv = mvt_image_priv_ensure(image);
+    const VideoFormatComponentInfo * const cip = &vip->components[0];
+    uint32_t w, n, bpc, stride;
+    wchar_t c;
+
+    if (!priv)
+        return false;
+
+    w = (image->width + 1) / 2;
+    bpc = (cip->bit_depth + 7) / 8;
+    stride = round_up(w * bpc, sizeof(wchar_t));
+
+    if (!priv->hash_data || priv->hash_data_size < stride) {
+        if (!mem_reallocp(&priv->hash_data, &priv->hash_data_size, stride))
+            return false;
+
+        /* In MVT, high bit depth components are always stored in
+           native endian byte order */
+#define INIT_CHROMA(bpc, type)                          \
+        case bpc: {                                     \
+            type * const p = (type *)&c;                \
+            int i;                                      \
+            for (i = 0; i < sizeof(c) / bpc; i++)       \
+                p[i] = 1U << (cip->bit_depth - 1);      \
+            break;                                      \
+        }
+
+        switch (bpc) {
+            INIT_CHROMA(1, uint8_t);
+            INIT_CHROMA(2, uint16_t);
+            INIT_CHROMA(4, uint32_t);
+        default: return false;
+        }
+#undef INIT_CHROMA
+        wmemset((wchar_t *)priv->hash_data, c, stride / sizeof(c));
+    }
+
+    mvt_hash_init(hash);
+    mvt_image_hash_component(image, hash, vip, 0);
+    for (n = 2 * ((image->height + 1) / 2); n > 0; n--)
+        mvt_hash_update(hash, priv->hash_data, w * bpc);
+    mvt_hash_finalize(hash);
+    return true;
+}
+
 // Computes the checksum from the supplied MvtImage object and hash function
 bool
 mvt_image_hash(MvtImage *image, MvtHash *hash)
@@ -72,12 +124,13 @@ mvt_image_hash(MvtImage *image, MvtHash *hash)
     if (!vip || !video_format_is_yuv(image->format))
         goto error_unsupported_format;
 
+    if (MVT_UNLIKELY(vip->num_components == 1))
+        return mvt_image_hash_grayscale(image, hash, vip);
+
     mvt_hash_init(hash);
     mvt_image_hash_component(image, hash, vip, 0);
-    if (vip->num_components > 1) {
-        mvt_image_hash_component(image, hash, vip, 1);
-        mvt_image_hash_component(image, hash, vip, 2);
-    }
+    mvt_image_hash_component(image, hash, vip, 1);
+    mvt_image_hash_component(image, hash, vip, 2);
     mvt_hash_finalize(hash);
     return true;
 
