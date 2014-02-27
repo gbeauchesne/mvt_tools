@@ -487,9 +487,28 @@ static bool
 decoder_init_context(Decoder *decoder)
 {
     const HWAccelDecoder * const hwaccel = decoder->hwaccel;
+    AVCodecContext * const avctx = MVT_DECODER_FFMPEG(decoder)->avctx;
 
-    if (hwaccel->init_context && !hwaccel->init_context(MVT_DECODER(decoder)))
-        return false;
+    if (hwaccel->init_context)
+        return hwaccel->init_context(MVT_DECODER(decoder));
+
+    /* Always enable bitexact output mode */
+    avctx->flags |= CODEC_FLAG_BITEXACT;
+
+    /* Also try to enable "simple" IDCT transforms. Though, only for a
+       known set of video codecs where this is known to be useful */
+    switch (avctx->codec_id) {
+    case AV_CODEC_ID_MPEG1VIDEO:
+    case AV_CODEC_ID_MPEG2VIDEO:
+    case AV_CODEC_ID_MPEG4:
+    case AV_CODEC_ID_MJPEG:
+    case AV_CODEC_ID_H263:
+        if (avctx->idct_algo == FF_IDCT_AUTO)
+            avctx->idct_algo = FF_IDCT_SIMPLE;
+        break;
+    default:
+        break;
+    }
     return true;
 }
 
