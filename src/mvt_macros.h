@@ -30,6 +30,10 @@
 #define MVT_MIN(a, b)                   (((a) < (b)) ? (a) : (b))
 #define MVT_MAX(a, b)                   (((a) > (b)) ? (a) : (b))
 
+#ifndef MVT_ALIGNED
+#define MVT_ALIGNED(n)                  __attribute__((__aligned__(n)))
+#endif
+
 #if defined __GNUC__
 # define MVT_LIKELY(expr)               (__builtin_expect(!!(expr), 1))
 # define MVT_UNLIKELY(expr)             (__builtin_expect(!!(expr), 0))
