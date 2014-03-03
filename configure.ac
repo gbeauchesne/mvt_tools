@@ -2,7 +2,7 @@
 m4_define([mvt_major_version], [0])
 m4_define([mvt_minor_version], [2])
 m4_define([mvt_micro_version], [1])
-m4_define([mvt_pre_version],   [1])
+m4_define([mvt_pre_version],   [0])
 m4_define([mvt_version],
           [mvt_major_version.mvt_minor_version.mvt_micro_version])
 m4_if(mvt_pre_version, [0], [], [

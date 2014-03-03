@@ -1,5 +1,12 @@
-Media Validation Tools (MVT) NEWS -- summary of changes.  2014-02-18
+Media Validation Tools (MVT) NEWS -- summary of changes.  2014-02-27
 Copyright (C) 2013-2014 Intel Corporation
+
+Version 0.2.1 - 27.Feb.2014
+* Add mvt_run helper tool to run a batch of tests
+* Add tests configs for VP8 (63), VP9 (208) and H.264 AVC (250)
+* Add support for planar YUV 4:2:2 and 4:4:4 formats
+* Fix support for cropped frames in FFmpeg (vaapi)
+* Fix number of scratch surfaces for FFmpeg (vaapi)
 
 Version 0.2.0 - 18.Feb.2014
 * Add support for high bit depts (>8-bit)
