@@ -121,6 +121,12 @@ fi
 if test "$enable_ref_h264" = "yes"; then
     enable_ffmpeg="yes"
 fi
+if test "$enable_builtin_ffmpeg" = "yes"; then
+    needs_yasm="yes"
+fi
+if test "$enable_builtin_libvpx" = "yes"; then
+    needs_yasm="yes"
+fi
 
 dnl Check for tools
 AC_PROG_CC
@@ -132,6 +138,9 @@ AC_PATH_PROG([UNZIP], [unzip])
 
 AC_ARG_VAR([YASM], [Path to yasm program, if any])
 AC_PATH_PROG([YASM], [yasm])
+if test "$needs_yasm" = "yes" -a -z "$YASM"; then
+    AC_MSG_ERROR([yasm is needed to build libvpx and FFmpeg sources])
+fi
 
 AC_C_BIGENDIAN
 AC_CHECK_LIB([m], [log10])
