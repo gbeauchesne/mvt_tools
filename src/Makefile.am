@@ -223,7 +223,7 @@ endif
 gen_ref_vpx_source_c	= gen_ref_vpx.c
 gen_ref_vpx_SOURCES	= $(gen_ref_vpx_source_c)
 gen_ref_vpx_CFLAGS	= $(VPX_CFLAGS) $(libdec_ffmpeg_cflags)
-gen_ref_vpx_LDADD	= $(VPX_LIBS) libdec_ffmpeg.la
+gen_ref_vpx_LDADD	= $(VPX_LIBS) libdec_ffmpeg.la -ldl
 
 EXTRA_DIST = \
 	$(mvt_decoder_source_c)		\
