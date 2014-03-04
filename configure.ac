@@ -418,6 +418,13 @@ AM_CONDITIONAL([GST_VAAPI_BACKEND_X11], [test $USE_GST_VAAPI_BACKEND_X11 -eq 1])
 
 AC_CONFIG_FILES([
     Makefile
+    debian.upstream/Makefile
+    debian.upstream/changelog
+    debian.upstream/control
+    debian.upstream/mvt-base.install
+    debian.upstream/mvt-ffmpeg.install
+    debian.upstream/mvt-gstreamer.install
+    debian.upstream/mvt-reference.install
     ext/Makefile
     ext/ffmpeg/Makefile
     ext/files/Makefile

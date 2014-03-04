@@ -1,0 +1,60 @@
+Source: @PACKAGE_NAME@
+Section: libs
+Priority: optional
+Maintainer: Gwenole Beauchesne <gwenole.beauchesne@intel.com>
+Build-Depends: automake,
+               autotools-dev,
+               debhelper (>= 5),
+               libtool,
+               libgstreamer-plugins-base@GST_API_VERSION@-dev (>= @GST_VERSION_REQUIRED@),
+               libgstvaapi@GST_API_VERSION@-dev (>= @GST_VAAPI_VERSION@),
+               libva-dev (>= @LIBVA_PACKAGE_VERSION@),
+               pkg-config,
+               yasm
+Standards-Version: 3.7.2
+
+Package: @PACKAGE_NAME@-base
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Media Validation Tools
+ This package contains common Media Validation Tools and libraries:
+ - `mvt_run': main testsuite execution engine (helper tool)
+ - `gen_ref_rawvideo': generate reference data from raw YUV videos in Y4M format
+
+Package: @PACKAGE_NAME@-gstreamer
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends},
+         @PACKAGE_NAME@-base (= ${Source-Version})
+Description: Media Validation Tools for GStreamer
+ This package contains GStreamer-based tools:
+ - `dec_gstreamer': decoder using software or hardware accelerated components
+
+Package: @PACKAGE_NAME@-ffmpeg
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends},
+         @PACKAGE_NAME@-base (= ${Source-Version})
+Description: Media Validation Tools for FFmpeg
+ This package contains FFmpeg-based tools:
+ - `dec_ffmpeg': decoder using software or hardware accelerated components
+
+Package: @PACKAGE_NAME@-reference
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends},
+         @PACKAGE_NAME@-ffmpeg (= ${Source-Version})
+Description: Reference Software Decoders
+ This package contains Reference Software decoders:
+ - `gen_ref_vpx': reference VP8/VP9 software decoder based on libvpx
+ - `gen_ref_h264_avc': reference H.264 AVC software decoder based on JM
+
+Package: @PACKAGE_NAME@-dbg
+Section: libdevel
+Architecture: any
+Depends: @PACKAGE_NAME@-base (= ${Source-Version}),
+         @PACKAGE_NAME@-gstreamer (= ${Source-Version}),
+         @PACKAGE_NAME@-ffmpeg (= ${Source-Version})
+Description: Media Validation Tools
+ This package contains the debug files.

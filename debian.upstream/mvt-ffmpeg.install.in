@@ -1,0 +1,2 @@
+debian/tmp/usr/lib/libmvt_ffmpeg.so.*
+debian/tmp/usr/lib/mvt/dec_ffmpeg

@@ -1,0 +1,2 @@
+debian/tmp/usr/lib/libmvt_utils.so.*
+debian/tmp/usr/bin/mvt_run
