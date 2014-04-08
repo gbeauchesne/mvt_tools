@@ -335,7 +335,7 @@ SSE_CopyFromNV12(MvtImage *dst_image, MvtImage *src_image)
         dst_image->pixels[2], dst_image->pitches[2],
         src_image->pixels[1], src_image->pitches[1],
         priv->copy_cache, priv->copy_cache_size,
-        dst_image->width/2, dst_image->height/2, cpu);
+        (dst_image->width + 1)/2, (dst_image->height + 1)/2, cpu);
     asm volatile ("emms");
     return true;
 }
@@ -352,9 +352,9 @@ SSE_CopyFromI420(MvtImage *dst_image, MvtImage *src_image)
     for (n = 0; n < 3; n++) {
         const unsigned d = n > 0 ? 2 : 1;
         SSE_CopyPlane(dst_image->pixels[n], dst_image->pitches[n],
-                      src_image->pixels[n], src_image->pitches[n],
-                      priv->copy_cache, priv->copy_cache_size,
-                      dst_image->width/d, dst_image->height/d, cpu);
+            src_image->pixels[n], src_image->pitches[n],
+            priv->copy_cache, priv->copy_cache_size,
+            (dst_image->width + d - 1)/d, (dst_image->height + d - 1)/d, cpu);
     }
     asm volatile ("emms");
     return true;
