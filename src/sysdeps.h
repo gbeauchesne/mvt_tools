@@ -37,6 +37,15 @@
 #include "mvt_macros.h"
 #include "mvt_messages.h"
 
+/* Optimize for the supplied target */
+#if defined __GNUC__ && __GNUC__ >= 5 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 4)
+# define HAVE_OPT_TARGET 1
+# define OPT_TARGET(T) __attribute__((target(T)))
+#else
+# define HAVE_OPT_TARGET 0
+# define OPT_TARGET(T)
+#endif
+
 /* Visibility attributes */
 #if defined __GNUC__ && __GNUC__ >= 4
 # define DLL_PUBLIC __attribute__((visibility("default")))

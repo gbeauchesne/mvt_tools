@@ -30,6 +30,13 @@
 #include <libyuv/convert.h>
 #include <libyuv/convert_from.h>
 
+/* Check whether SSE4.1 optimizations could be used */
+#if defined(__x86_64__) || (defined(__i386__) && HAVE_OPT_TARGET)
+# define USE_SSE_COPY 1
+#else
+# define USE_SSE_COPY 0
+#endif
+
 /*****************************************************************************
  * copy.c: Fast I420/NV12 copy
  *****************************************************************************
@@ -53,6 +60,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
  *****************************************************************************/
 
+#if USE_SSE_COPY
 // Initializes copy cache buffer
 static bool
 ensure_copy_cache(MvtImage *image)
@@ -91,6 +99,7 @@ ensure_copy_cache(MvtImage *image)
  * XXX It is really efficient only when SSE4.1 is available.
  */
 static void
+OPT_TARGET("sse4.1")
 CopyFromUswc(uint8_t *dst, size_t dst_pitch,
     const uint8_t *src, size_t src_pitch,
     unsigned width, unsigned height, unsigned cpu)
@@ -138,6 +147,7 @@ CopyFromUswc(uint8_t *dst, size_t dst_pitch,
 }
 
 static void
+OPT_TARGET("sse2")
 Copy2d(uint8_t *dst, size_t dst_pitch,
     const uint8_t *src, size_t src_pitch,
     unsigned width, unsigned height)
@@ -170,6 +180,7 @@ Copy2d(uint8_t *dst, size_t dst_pitch,
 }
 
 static void
+OPT_TARGET("ssse3")
 SSE_SplitUV(uint8_t *dstu, size_t dstu_pitch,
     uint8_t *dstv, size_t dstv_pitch,
     const uint8_t *src, size_t src_pitch,
@@ -360,6 +371,7 @@ SSE_CopyFromI420(MvtImage *dst_image, MvtImage *src_image)
     return true;
 }
 #undef COPY64
+#endif
 
 /* -------------------------------------------------------------------------- */
 /* --- libyuv based conversions                                           --- */
@@ -370,6 +382,7 @@ static bool
 image_convert_internal(MvtImage *dst_image, const VideoFormatInfo *dst_vip,
     MvtImage *src_image, const VideoFormatInfo *src_vip, uint32_t flags)
 {
+#if USE_SSE_COPY
     if ((flags & MVT_IMAGE_FLAG_FROM_USWC) &&
         dst_image->format == VIDEO_FORMAT_I420) {
         switch (src_image->format) {
@@ -385,6 +398,7 @@ image_convert_internal(MvtImage *dst_image, const VideoFormatInfo *dst_vip,
             break;
         }
     }
+#endif
 
     if (src_image->format == VIDEO_FORMAT_NV12 &&
         dst_image->format == VIDEO_FORMAT_I420)
