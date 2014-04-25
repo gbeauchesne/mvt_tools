@@ -110,7 +110,9 @@ mvt_decoder_source_h = mvt_decoder.h
 # -----------------------------------------------------------------------------
 
 if ENABLE_BUILTIN_FFMPEG
-FFMPEG_CFLAGS	= -I$(top_srcdir)/ext/ffmpeg/upstream
+FFMPEG_CFLAGS	= \
+	-I$(top_srcdir)/ext/ffmpeg/upstream \
+	-I$(top_builddir)/ext/ffmpeg/upstream
 FFMPEG_LIBS	= $(top_builddir)/ext/ffmpeg/libmvt_ffmpeg.la
 else
 FFMPEG_CFLAGS	= $(LIBAVUTIL_CFLAGS) $(LIBAVFORMAT_CFLAGS) $(LIBAVCODEC_CFLAGS)
