@@ -174,7 +174,7 @@ mvt_report_write_image_hash(MvtReport *report, MvtImage *image, MvtHash *hash,
         break;
     }
 
-    fprintf(report->file, "%7d %10s %s 0x%-18s\n", report->image_index,
+    fprintf(report->file, "%7d %10s %s 0x%s\n", report->image_index,
         size_string, picture_structure_str, value_string);
 
     report->image_index++;

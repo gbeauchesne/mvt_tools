@@ -371,7 +371,7 @@ function run_test() {
         -c $CODEC_HASH                          \
         -r "$outdir/test.out"                   \
         $file >> $logfile 2>&1 && 
-    diff -u "$outdir/test.out" "$outdir/test.ref" >"$outdir/test.diff" && {
+    diff -ub "$outdir/test.out" "$outdir/test.ref" >"$outdir/test.diff" && {
         test_result="PASS"
         test_result_color="$vt_color_green"
         ((N_TESTS_PASSED++))
