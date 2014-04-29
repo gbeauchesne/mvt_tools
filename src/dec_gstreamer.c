@@ -267,6 +267,7 @@ typedef struct {
     GstElement         *pipeline;
     GstElement         *source;
     GstElement         *decodebin;
+    GstElement         *vparse;
     GstElement         *vdecode;
     GstElement         *vsink;
     GstCaps            *vsink_caps;
@@ -341,6 +342,7 @@ app_finalize(App *app)
     if (app->loop)
         g_main_loop_unref(app->loop);
     mvt_image_freep(&app->image);
+    gst_object_replace((GstObject **)&app->vparse, NULL);
     gst_object_replace((GstObject **)&app->vdecode, NULL);
     gst_caps_replace(&app->vsink_caps, NULL);
     g_clear_error(&app->error);
@@ -615,6 +617,11 @@ on_autoplug_select(GstElement *element, GstPad *pad, GstCaps *caps,
         !gst_element_factory_list_is_type(factory,
             GST_ELEMENT_FACTORY_TYPE_MEDIA_IMAGE))
         return GST_AUTOPLUG_SELECT_TRY;
+
+    if (gst_element_factory_list_is_type(factory,
+            GST_ELEMENT_FACTORY_TYPE_PARSER) && app->vparse)
+        return GST_AUTOPLUG_SELECT_SKIP;
+
     if (!gst_element_factory_list_is_type(factory,
             GST_ELEMENT_FACTORY_TYPE_DECODER))
         return GST_AUTOPLUG_SELECT_TRY;
@@ -643,17 +650,26 @@ static void
 on_element_added(GstBin *bin, GstElement *element, App *app)
 {
     GstElementFactory * const factory = gst_element_get_factory(element);
+    gpointer element_ptr = NULL;
 
     if (!gst_element_factory_list_is_type(factory,
             GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO) &&
         !gst_element_factory_list_is_type(factory,
             GST_ELEMENT_FACTORY_TYPE_MEDIA_IMAGE))
         return;
-    if (!gst_element_factory_list_is_type(factory,
-            GST_ELEMENT_FACTORY_TYPE_DECODER))
-        return;
 
-    gst_object_replace((GstObject **)&app->vdecode, (GstObject *)element);
+    /* Video decoder */
+    if (gst_element_factory_list_is_type(factory,
+            GST_ELEMENT_FACTORY_TYPE_DECODER))
+        element_ptr = &app->vdecode;
+
+    /* Video parser */
+    else if (gst_element_factory_list_is_type(factory,
+                 GST_ELEMENT_FACTORY_TYPE_PARSER))
+        element_ptr = &app->vparse;
+
+    if (element_ptr)
+        gst_object_replace(element_ptr, (GstObject *)element);
 }
 
 static gboolean
