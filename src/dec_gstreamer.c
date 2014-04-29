@@ -341,6 +341,7 @@ app_finalize(App *app)
     if (app->loop)
         g_main_loop_unref(app->loop);
     mvt_image_freep(&app->image);
+    gst_object_replace((GstObject **)&app->vdecode, NULL);
     gst_caps_replace(&app->vsink_caps, NULL);
     g_clear_error(&app->error);
 }
@@ -653,7 +654,6 @@ on_element_added(GstBin *bin, GstElement *element, App *app)
         return;
 
     gst_object_replace((GstObject **)&app->vdecode, (GstObject *)element);
-    gst_object_unref(element);
 }
 
 static gboolean
