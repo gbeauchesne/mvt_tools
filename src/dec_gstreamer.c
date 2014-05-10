@@ -534,7 +534,7 @@ app_handle_hw_surface_vaapi(App *app, GstBuffer *buffer,
     if (!app->image || (app->image->width != dst_image.width ||
             app->image->height != dst_image.height)) {
         mvt_image_freep(&app->image);
-        app->image = mvt_image_new(VIDEO_FORMAT_I420,
+        app->image = mvt_image_new(video_format_normalize(dst_image.format),
             dst_image.width, dst_image.height);
         if (!app->image)
             goto error_convert_image;
