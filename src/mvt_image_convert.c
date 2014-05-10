@@ -377,14 +377,47 @@ SSE_CopyFromI420(MvtImage *dst_image, MvtImage *src_image)
 /* --- libyuv based conversions                                           --- */
 /* -------------------------------------------------------------------------- */
 
-// Converts images with the same size
 static bool
-image_convert_internal(MvtImage *dst_image, const VideoFormatInfo *dst_vip,
-    MvtImage *src_image, const VideoFormatInfo *src_vip, uint32_t flags)
+image_convert_uswc(MvtImage *dst_image, MvtImage *src_image, uint32_t flags);
+
+// Copies images with the same size and format
+static bool
+image_copy_internal(MvtImage *dst_image, MvtImage *src_image,
+    const VideoFormatInfo *vip, uint32_t flags)
 {
+    unsigned i, y;
+
+    if (dst_image->format != src_image->format)
+        return false;
+    if (dst_image->width != src_image->width)
+        return false;
+    if (dst_image->height != src_image->height)
+        return false;
+
+    for (i = 0; i < dst_image->num_planes; i++) {
+        uint8_t *dst_pixels = dst_image->pixels[0];
+        const uint8_t *src_pixels = src_image->pixels[i];
+        const uint32_t stride =
+            MVT_MIN(dst_image->pitches[i], src_image->pitches[i]);
+
+        for (y = 0; y < dst_image->height; y++) {
+            memcpy(dst_pixels, src_pixels, stride);
+            dst_pixels += dst_image->pitches[i];
+            src_pixels += src_image->pitches[i];
+        }
+    }
+    return true;
+}
+
+// Accelerated downloads from Uncached Speculative Write Combining memory
+static bool
+image_convert_uswc(MvtImage *dst_image, MvtImage *src_image, uint32_t flags)
+{
+    if (!(flags & MVT_IMAGE_FLAG_FROM_USWC))
+        return false;
+
 #if USE_SSE_COPY
-    if ((flags & MVT_IMAGE_FLAG_FROM_USWC) &&
-        dst_image->format == VIDEO_FORMAT_I420) {
+    if (dst_image->format == VIDEO_FORMAT_I420) {
         switch (src_image->format) {
         case VIDEO_FORMAT_NV12:
             if (SSE_CopyFromNV12(dst_image, src_image))
@@ -399,6 +432,16 @@ image_convert_internal(MvtImage *dst_image, const VideoFormatInfo *dst_vip,
         }
     }
 #endif
+    return false;
+}
+
+// Converts images with the same size
+static bool
+image_convert_internal(MvtImage *dst_image, const VideoFormatInfo *dst_vip,
+    MvtImage *src_image, const VideoFormatInfo *src_vip, uint32_t flags)
+{
+    if (image_convert_uswc(dst_image, src_image, flags))
+        return true;
 
     if (src_image->format == VIDEO_FORMAT_NV12 &&
         dst_image->format == VIDEO_FORMAT_I420)
@@ -427,6 +470,17 @@ image_convert_internal(MvtImage *dst_image, const VideoFormatInfo *dst_vip,
             dst_image->pixels[0], dst_image->pitches[0],
             dst_image->pixels[1], dst_image->pitches[1],
             dst_image->width, dst_image->height) == 0;
+
+    if (src_image->format == VIDEO_FORMAT_Y800 &&
+        dst_image->format == VIDEO_FORMAT_I420)
+        return I400ToI420(src_image->pixels[0], src_image->pitches[0],
+            dst_image->pixels[0], dst_image->pitches[0],
+            dst_image->pixels[1], dst_image->pitches[1],
+            dst_image->pixels[2], dst_image->pitches[2],
+            dst_image->width, dst_image->height) == 0;
+
+    if (src_image->format == dst_image->format)
+        return image_copy_internal(dst_image, src_image, dst_vip, flags);
 
     mvt_error("image: unsupported conversion (%s -> %s)",
         src_vip->name, dst_vip->name);
