@@ -185,6 +185,10 @@ bool
 video_format_get_pixel_pitches(VideoFormat format,
     uint32_t pixel_pitches[VIDEO_FORMAT_MAX_PLANES]);
 
+/** Normalizes the video format to a base one with same chroma format */
+VideoFormat
+video_format_normalize(VideoFormat format);
+
 MVT_END_DECLS
 
 #endif /* VIDEO_FORMAT_H */

@@ -352,3 +352,47 @@ video_format_get_pixel_pitches(VideoFormat format,
     }
     return true;
 }
+
+// Normalizes the video format to a base one with same chroma format
+VideoFormat
+video_format_normalize(VideoFormat format)
+{
+    const VideoFormatInfo * const vip = get_info(format);
+    VideoFormat out_format = VIDEO_FORMAT_UNKNOWN;
+
+    switch (vip->chroma_type) {
+    case VA_RT_FORMAT_YUV400:
+        out_format = VIDEO_FORMAT_Y800;
+        break;
+    case VA_RT_FORMAT_YUV420:
+        switch (vip->components[0].bit_depth) {
+        case 8:  out_format = VIDEO_FORMAT_I420;    break;
+        case 10: out_format = VIDEO_FORMAT_I420P10; break;
+        case 12: out_format = VIDEO_FORMAT_I420P12; break;
+        case 16: out_format = VIDEO_FORMAT_I420P16; break;
+        }
+        break;
+    case VA_RT_FORMAT_YUV422:
+        switch (vip->components[0].bit_depth) {
+        case 8:  out_format = VIDEO_FORMAT_I422;    break;
+        case 10: out_format = VIDEO_FORMAT_I422P10; break;
+        case 12: out_format = VIDEO_FORMAT_I422P12; break;
+        case 16: out_format = VIDEO_FORMAT_I422P16; break;
+        }
+        break;
+    case VA_RT_FORMAT_YUV444:
+        switch (vip->components[0].bit_depth) {
+        case 8:  out_format = VIDEO_FORMAT_I444;    break;
+        case 10: out_format = VIDEO_FORMAT_I444P10; break;
+        case 12: out_format = VIDEO_FORMAT_I444P12; break;
+        case 16: out_format = VIDEO_FORMAT_I444P16; break;
+        }
+        break;
+    case VA_RT_FORMAT_RGB32:
+        out_format = VIDEO_FORMAT_ARGB32;
+        break;
+    }
+    if (!out_format)
+        mvt_fatal_error("unsupported video format (%s)", vip->name);
+    return out_format;
+}
