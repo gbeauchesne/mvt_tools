@@ -310,6 +310,7 @@ function run_test() {
     local conffile=$(get_abs_path "$1") base_conffile=${1##*/} t
     local FILE FILE_URL FILE_HASH
     local CODEC CODEC_PROFILE CODEC_HASH CODEC_MAX_WIDTH CODEC_MAX_HEIGHT
+    local CODEC_PROFILE_COMPAT=''
 
     match_exclude_globs $conffile && return 0
 
@@ -336,7 +337,9 @@ function run_test() {
 
     # If testing with hardware acceleration, check the platform supports codec
     [[ "$opt_hwaccel" != "none" ]] && \
-        ! gfx_has_codec $gfx_device $CODEC $CODEC_PROFILE &&
+        ! gfx_has_codec $gfx_device $CODEC $CODEC_PROFILE && \
+      ( [[ -z "$CODEC_PROFILE_COMPAT" ]] || \
+        ! gfx_has_codec $gfx_device $CODEC $CODEC_PROFILE_COMPAT ) &&
     {
         log_message $logfile "info" "unsupported codec ($CODEC/$CODEC_PROFILE)"
         ((N_TESTS_SKIPPED++)); return 0
