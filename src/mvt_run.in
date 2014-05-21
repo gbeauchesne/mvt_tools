@@ -421,7 +421,8 @@ else
 fi
 
 n_tests=$((N_TESTS - N_TESTS_SKIPPED))
-pass_rate=$(bc <<< "if ($n_tests > 0) 100 * $N_TESTS_PASSED / $n_tests else 0")
+pass_rate=$(bc -l <<< \
+    "if ($n_tests > 0) 100 * $N_TESTS_PASSED / $n_tests else 0")
 printf "\nSummary: %d tests run. Passed: %d (%.2f%%)\n" \
     $n_tests $N_TESTS_PASSED $pass_rate | tee -a $TEST_LOGFILE
 
