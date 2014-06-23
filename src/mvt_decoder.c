@@ -168,6 +168,7 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
         { "hwaccel",    required_argument,  NULL, OPT_HWACCEL           },
         { "vaapi",      no_argument,        NULL, OPT_VAAPI             },
         { "report",     required_argument,  NULL, 'r'                   },
+        { "option",     required_argument,  NULL, 'o'                   },
         { "gen-config", optional_argument,  NULL, OPT_GEN_CONFIG        },
         { "gen-output", optional_argument,  NULL, OPT_GEN_OUTPUT        },
         { "benchmark",  no_argument,        NULL, OPT_BENCHMARK         },
@@ -214,6 +215,17 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
             if (!options->report_filename)
                 goto error_alloc_memory;
             break;
+        case 'o': {
+            const MvtDecoderClass * const klass = mvt_decoder_class();
+            if (klass->init_option) {
+                const char *value = strchr(optarg, '=');
+                char *key = value ? strndup(optarg, ++value - optarg - 1) :
+                    strdup(optarg);
+                klass->init_option(decoder, key, value);
+                free(key);
+            }
+            break;
+        }
         case OPT_GEN_OUTPUT:
             free(options->output_filename);
             if (optarg) {

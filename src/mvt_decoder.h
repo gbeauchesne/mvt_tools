@@ -77,6 +77,8 @@ typedef struct {
 } MvtDecoder;
 
 typedef bool (*MvtDecoderInitFunc)(MvtDecoder *decoder);
+typedef bool (*MvtDecoderInitOptionFunc)(MvtDecoder *decoder, const char *key,
+    const char *value);
 typedef void (*MvtDecoderFinalizeFunc)(MvtDecoder *decoder);
 typedef bool (*MvtDecoderRunFunc)(MvtDecoder *decoder);
 
@@ -84,6 +86,7 @@ typedef bool (*MvtDecoderRunFunc)(MvtDecoder *decoder);
 typedef struct {
     uint32_t size;
     MvtDecoderInitFunc init;
+    MvtDecoderInitOptionFunc init_option;
     MvtDecoderFinalizeFunc finalize;
     MvtDecoderRunFunc run;
 } MvtDecoderClass;
