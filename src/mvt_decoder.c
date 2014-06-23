@@ -157,19 +157,20 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
     enum {
         OPT_HWACCEL = 1000,
         OPT_VAAPI,
-        OPT_GEN_CONF,
+        OPT_GEN_CONFIG,
+        OPT_GEN_OUTPUT,
         OPT_BENCHMARK,
     };
 
     static const struct option long_options[] = {
-        { "help",       no_argument,        NULL, 'h'           },
-        { "checksum",   required_argument,  NULL, 'c'           },
-        { "hwaccel",    required_argument,  NULL, OPT_HWACCEL   },
-        { "vaapi",      no_argument,        NULL, OPT_VAAPI     },
-        { "report",     required_argument,  NULL, 'r'           },
-        { "gen-config", optional_argument,  NULL, OPT_GEN_CONF  },
-        { "gen-output", optional_argument,  NULL, 'o'           },
-        { "benchmark",  no_argument,        NULL, OPT_BENCHMARK },
+        { "help",       no_argument,        NULL, 'h'                   },
+        { "checksum",   required_argument,  NULL, 'c'                   },
+        { "hwaccel",    required_argument,  NULL, OPT_HWACCEL           },
+        { "vaapi",      no_argument,        NULL, OPT_VAAPI             },
+        { "report",     required_argument,  NULL, 'r'                   },
+        { "gen-config", optional_argument,  NULL, OPT_GEN_CONFIG        },
+        { "gen-output", optional_argument,  NULL, OPT_GEN_OUTPUT        },
+        { "benchmark",  no_argument,        NULL, OPT_BENCHMARK         },
         { NULL, }
     };
 
@@ -195,7 +196,7 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
         case OPT_VAAPI:
             options->hwaccel = MVT_HWACCEL_VAAPI;
             break;
-        case OPT_GEN_CONF:
+        case OPT_GEN_CONFIG:
             free(options->config_filename);
             options->config_filename = strdup(optarg ? optarg : "-");
             if (!options->config_filename)
@@ -213,7 +214,7 @@ mvt_decoder_init_options(MvtDecoder *decoder, int argc, char *argv[])
             if (!options->report_filename)
                 goto error_alloc_memory;
             break;
-        case 'o':
+        case OPT_GEN_OUTPUT:
             free(options->output_filename);
             if (optarg) {
                 options->output_filename = strdup(optarg);
