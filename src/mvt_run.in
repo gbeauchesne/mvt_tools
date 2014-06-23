@@ -35,6 +35,9 @@ DEFAULT_DECODER="dec_gstreamer"
 # Default hardware acceleration mode. Override with --hwaccel=* argument
 DEFAULT_HWACCEL="none"
 
+# Use plain C locale
+export LC_ALL=C
+
 # Message logging utilities
 function log_message() {
     local out="$1" category="$2"
