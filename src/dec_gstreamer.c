@@ -268,6 +268,7 @@ typedef struct {
     GstElement         *source;
     GstElement         *decodebin;
     GstElement         *vparse;
+    GstCaps            *vparse_capsfilter;
     GstElement         *vdecode;
     GstElement         *vsink;
     GstCaps            *vsink_caps;
@@ -316,6 +317,17 @@ app_error(App *app, const gchar *format, ...)
 }
 
 static bool
+app_init_gst(App *app)
+{
+    if (!app->gst_init_done) {
+        if (!gst_init_check(NULL, NULL, &app->error))
+            return false;
+        app->gst_init_done = true;
+    }
+    return true;
+}
+
+static bool
 app_init(App *app)
 {
     app->loop = g_main_loop_new(NULL, FALSE);
@@ -342,6 +354,7 @@ app_finalize(App *app)
     if (app->loop)
         g_main_loop_unref(app->loop);
     mvt_image_freep(&app->image);
+    gst_caps_replace(&app->vparse_capsfilter, NULL);
     gst_object_replace((GstObject **)&app->vparse, NULL);
     gst_object_replace((GstObject **)&app->vdecode, NULL);
     gst_caps_replace(&app->vsink_caps, NULL);
@@ -585,6 +598,25 @@ error_convert_image:
     return FALSE;
 }
 
+static gboolean
+on_autoplug_query(GstElement *element, GstPad *pad, GstElement *child,
+    GstQuery *query, App *app)
+{
+    GstCaps *filter, *outcaps;
+
+    /* Detect video parser 'caps' query on src pad */
+    if (child != app->vparse || !app->vparse_capsfilter)
+        return FALSE;
+    if (!GST_PAD_IS_SRC(pad) || GST_QUERY_TYPE(query) != GST_QUERY_CAPS)
+        return FALSE;
+
+    gst_query_parse_caps(query, &filter);
+    outcaps = gst_caps_intersect(filter, app->vparse_capsfilter);
+    gst_query_set_caps_result(query, outcaps);
+    gst_caps_unref(outcaps);
+    return TRUE;
+}
+
 typedef enum {
     GST_AUTOPLUG_SELECT_TRY,
     GST_AUTOPLUG_SELECT_EXPOSE,
@@ -767,6 +799,8 @@ app_init_pipeline(App *app)
         G_CALLBACK(on_pad_added), app->vsink);
     g_signal_connect(app->decodebin, "element-added",
         G_CALLBACK(on_element_added), app);
+    g_signal_connect(app->decodebin, "autoplug-query",
+        G_CALLBACK(on_autoplug_query), app);
     g_signal_connect(app->decodebin, "autoplug-select",
         G_CALLBACK(on_autoplug_select), app);
     g_signal_connect(app->vsink, "handoff",
@@ -906,12 +940,9 @@ static bool
 decoder_init(MvtDecoder *decoder)
 {
     App * const app = (App *)decoder;
-    GError *error = NULL;
 
-    if (!gst_init_check(NULL, NULL, &error))
+    if (!app_init_gst(app))
         goto error_init_gst;
-    app->gst_init_done = TRUE;
-
     if (!app_init(app))
         goto error_alloc_memory;
     if (!app_init_pipeline(app))
@@ -927,8 +958,7 @@ error_alloc_memory:
     mvt_error("failed to allocate memory");
     return false;
 error_init_gst:
-    mvt_error("failed to parse arguments (%s)", error->message);
-    g_error_free(error);
+    mvt_error("failed to parse arguments (%s)", app->error->message);
     return false;
 error_init_pipeline:
     mvt_error("failed to initialize pipeline (%s)", app->error->message);
@@ -938,6 +968,28 @@ error_init_bus:
     return false;
 error_init_winsys:
     mvt_error("failed to initialize windowing system (%s)", app->error->message);
+    return false;
+}
+
+static bool
+decoder_init_option(MvtDecoder *decoder, const char *key, const char *value)
+{
+    App * const app = (App *)decoder;
+    GstCaps *caps;
+
+    if (!app_init_gst(app))
+        return false;
+
+    if (!g_strcmp0(key, "vparse_capsfilter") && value) {
+        do {
+            caps = gst_caps_from_string(value);
+            if (!caps)
+                break;
+            gst_caps_replace(&app->vparse_capsfilter, caps);
+            gst_caps_unref(caps);
+            return true;
+        } while (0);
+    }
     return false;
 }
 
@@ -972,6 +1024,7 @@ mvt_decoder_class(void)
     static const MvtDecoderClass g_class = {
         .size = sizeof(App),
         .init = decoder_init,
+        .init_option = decoder_init_option,
         .finalize = decoder_finalize,
         .run = decoder_run
     };
