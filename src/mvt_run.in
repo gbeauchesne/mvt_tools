@@ -67,6 +67,7 @@ Options:
       --decoder=DECODER       define the decoder to run [$DEFAULT_DECODER]
       --hwaccel=MODE          define the hardware acceleration mode [$DEFAULT_HWACCEL]
       --gen-rawvideo          generate raw video (YUV in Y4M format) [no]
+  -e, --extra-option=OPTION   append extra option to module options [none]
   -x, --exclude=GLOB          exclude test configurations matching GLOB
 
 Package options:
@@ -84,6 +85,7 @@ arg_decoder="$DEFAULT_DECODER"
 opt_hwaccel="$DEFAULT_HWACCEL"
 gen_rawvideo="no"
 array_decl exclude_globs
+array_decl module_options
 while getopts ":he:p:t:i:o:x:-:" optchar "$@"; do
     case "$optchar" in
         (h)                     print_help; exit 1;;
@@ -91,6 +93,7 @@ while getopts ":he:p:t:i:o:x:-:" optchar "$@"; do
         (t)                     testdir="$OPTARG";;
         (i)                     inputdir="$OPTARG";;
         (o)                     outputdir="$OPTARG";;
+        (e)                     array_append module_options "$OPTARG";;
         (x)                     array_append exclude_globs "$OPTARG";;
         (\?)                    illegal_option "-$OPTARG";;
         (-)
@@ -106,6 +109,7 @@ while getopts ":he:p:t:i:o:x:-:" optchar "$@"; do
                 (testdir=*)     testdir="$optval";;
                 (input=*)       input="$optval";;
                 (outputdir=*)   outputdir="$optval";;
+                (extra-option=*)array_append module_options "$optval";;
                 (exclude=*)     array_append exclude_globs "$optval";;
                 (*=*)           illegal_option "--$optvar=$optval";;
                 (*)             illegal_option "--$optvar";;
@@ -380,6 +384,7 @@ function run_test() {
         --hwaccel=$opt_hwaccel                  \
         -c $CODEC_HASH                          \
         -r "$outdir/test.out"                   \
+        $MODULE_OPTIONS_ARG                     \
         $file >> $logfile 2>&1 && 
     diff -ub "$outdir/test.out" "$outdir/test.ref" >"$outdir/test.diff" && {
         test_result="PASS"
@@ -410,6 +415,11 @@ echo "Hardware acceleration mode \`$opt_hwaccel' enabled on " \
     $(gfx_get_device_name $gfx_device) >> $TEST_LOGFILE
 echo >> $TEST_LOGFILE
 cat $TEST_LOGFILE
+
+MODULE_OPTIONS_ARG=""
+for ((i = 0; i < $module_options_size; i++)); do
+    MODULE_OPTIONS_ARG="${MODULE_OPTIONS_ARG} -o ${module_options[$i]}"
+done
 
 if [[ $# -eq 0 ]]; then
     run_tests $testdir
