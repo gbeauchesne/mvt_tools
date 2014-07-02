@@ -268,6 +268,7 @@ typedef struct {
     GstElement         *source;
     GstElement         *decodebin;
     GstElement         *vparse;
+    gchar              *vparse_name;
     GstCaps            *vparse_capsfilter;
     GstElement         *vdecode;
     GstElement         *vsink;
@@ -354,6 +355,7 @@ app_finalize(App *app)
     if (app->loop)
         g_main_loop_unref(app->loop);
     mvt_image_freep(&app->image);
+    g_free(app->vparse_name);
     gst_caps_replace(&app->vparse_capsfilter, NULL);
     gst_object_replace((GstObject **)&app->vparse, NULL);
     gst_object_replace((GstObject **)&app->vdecode, NULL);
@@ -651,7 +653,9 @@ on_autoplug_select(GstElement *element, GstPad *pad, GstCaps *caps,
         return GST_AUTOPLUG_SELECT_TRY;
 
     if (gst_element_factory_list_is_type(factory,
-            GST_ELEMENT_FACTORY_TYPE_PARSER) && app->vparse)
+            GST_ELEMENT_FACTORY_TYPE_PARSER) &&
+        (app->vparse || (app->vparse_name &&
+            !g_str_has_prefix(element_name, app->vparse_name))))
         return GST_AUTOPLUG_SELECT_SKIP;
 
     if (!gst_element_factory_list_is_type(factory,
@@ -989,6 +993,14 @@ decoder_init_option(MvtDecoder *decoder, const char *key, const char *value)
             gst_caps_unref(caps);
             return true;
         } while (0);
+    }
+
+    /* Allow "vparse" option to select the video parser element */
+    else if (!g_strcmp0(key, "vparse") && value) {
+        g_free(app->vparse_name);
+        app->vparse_name = g_strdup(value);
+        if (app->vparse_name)
+            return true;
     }
     return false;
 }
