@@ -642,24 +642,28 @@ on_autoplug_select(GstElement *element, GstPad *pad, GstCaps *caps,
         return GST_AUTOPLUG_SELECT_SKIP;
     }
 
-    /* Filter out factories that are not "media-video" + "decoder" */
+    /* Filter out audio parser or audio decoder */
     if (gst_element_factory_list_is_type(factory,
+            (GST_ELEMENT_FACTORY_TYPE_PARSER |
+             GST_ELEMENT_FACTORY_TYPE_DECODER) |
             GST_ELEMENT_FACTORY_TYPE_MEDIA_AUDIO))
         return GST_AUTOPLUG_SELECT_SKIP;
-    if (!gst_element_factory_list_is_type(factory,
-            GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO) &&
-        !gst_element_factory_list_is_type(factory,
-            GST_ELEMENT_FACTORY_TYPE_MEDIA_IMAGE))
-        return GST_AUTOPLUG_SELECT_TRY;
 
+    /* Work out video parser specifics */
     if (gst_element_factory_list_is_type(factory,
-            GST_ELEMENT_FACTORY_TYPE_PARSER) &&
-        (app->vparse || (app->vparse_name &&
-            !g_str_has_prefix(element_name, app->vparse_name))))
-        return GST_AUTOPLUG_SELECT_SKIP;
+            GST_ELEMENT_FACTORY_TYPE_PARSER |
+            GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO)) {
+        if (app->vparse || (app->vparse_name &&
+                !g_str_has_prefix(element_name, app->vparse_name)))
+            return GST_AUTOPLUG_SELECT_SKIP;
+        return GST_AUTOPLUG_SELECT_TRY;
+    }
 
+    /* Try out anything that is not a video decoder */
     if (!gst_element_factory_list_is_type(factory,
-            GST_ELEMENT_FACTORY_TYPE_DECODER))
+            GST_ELEMENT_FACTORY_TYPE_DECODER |
+            (GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO |
+             GST_ELEMENT_FACTORY_TYPE_MEDIA_IMAGE)))
         return GST_AUTOPLUG_SELECT_TRY;
 
     /* Filter out/in hardware accelerated decoders when needed */
@@ -688,20 +692,18 @@ on_element_added(GstBin *bin, GstElement *element, App *app)
     GstElementFactory * const factory = gst_element_get_factory(element);
     gpointer element_ptr = NULL;
 
-    if (!gst_element_factory_list_is_type(factory,
-            GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO) &&
-        !gst_element_factory_list_is_type(factory,
-            GST_ELEMENT_FACTORY_TYPE_MEDIA_IMAGE))
-        return;
-
     /* Video decoder */
     if (gst_element_factory_list_is_type(factory,
-            GST_ELEMENT_FACTORY_TYPE_DECODER))
+            GST_ELEMENT_FACTORY_TYPE_DECODER |
+            (GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO |
+             GST_ELEMENT_FACTORY_TYPE_MEDIA_IMAGE)))
         element_ptr = &app->vdecode;
 
     /* Video parser */
     else if (gst_element_factory_list_is_type(factory,
-                 GST_ELEMENT_FACTORY_TYPE_PARSER))
+                 GST_ELEMENT_FACTORY_TYPE_PARSER |
+                 (GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO |
+                  GST_ELEMENT_FACTORY_TYPE_MEDIA_IMAGE)))
         element_ptr = &app->vparse;
 
     if (element_ptr)
