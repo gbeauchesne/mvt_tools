@@ -39,3 +39,17 @@ Software requirements
       libglib2.0-dev (>= 2.28)
       libgstreamer1.0-dev (>= 1.2.0)
       libgstreamer-plugins-bad1.0-dev (>= 1.2.0)
+
+
+Usage
+-----
+
+  * Run all supported tests with FFmpeg
+  $ mvt_run --decoder=ffmpeg -o out.ffmpeg
+
+  * Run all H.264 conformance tests with gstreamer-vaapi, and excluding MVC
+  $ mvt_run --decoder=gstreamer --vaapi -o out.gstreamer.vaapi -x "*MVC*" \
+      /path/to/MVT/tests/h264/conformance
+
+  * Run the reference H.264 AVC (JM) decoder on a particular file
+  $ gen_ref_h264_avc -r ref /path/to/video.mp4
