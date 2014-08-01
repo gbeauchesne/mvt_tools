@@ -171,10 +171,6 @@ function gfx_get_device() {
         (0x0f3[0-3]|0x015[57])  echo "BYT";; # Gen7
         (0x0[4da]*)             echo "HSW";; # Gen7.5
         (0x16[0-3][26bade])     echo "BDW";; # Gen8
-        (0x22b[0-3])            echo "CHV";; # Gen8LP
-        (0x19[02]4|0x192[046])  echo "SKL";; # Gen9
-        (0x1910)                echo "SKL";; # Gen9
-        (0x0a8[4-7])            echo "BXT";; # Gen9LP
     esac
 }
 
@@ -188,11 +184,6 @@ function gfx_get_device_name() {
         (BYT) echo "Baytrail";;
         (HSW) echo "Haswell";;
         (BDW) echo "Broadwell";;
-        (CHV) echo "Cherryview";;
-        (SKL) echo "Skylake";;
-        (BXT) echo "Broxton";;
-        (CNL) echo "Cannonlake";;
-        (OWF) echo "Owenfield";;
         (*)   echo "<$device>";;
     esac
 }
@@ -206,10 +197,7 @@ gfx_device=$(gfx_get_device $pci_device)
 function gfx_has_codec() {
     local gfx_device="$1" codec="$2" profile="$3"
     local no_jpeg_pattern="SNB"
-    local no_hevc_pattern="SNB|IVB|BYT|HSW|BDW"
-    local no_hevc_10b_pattern="$no_hevc_pattern|CHV|SKL|BXT"
     local no_vp8_pattern="SNB|IVB|HSW"
-    local no_vp9_pattern="SNB|IVB|BYT|HSW|BDW|CHV|SKL"
 
     case "${gfx_device^^}:${codec,,}:${profile,,}" in
         (@($no_jpeg_pattern):jpeg:*)            return 1;; # JPEG
@@ -226,18 +214,12 @@ function gfx_has_codec() {
         (*:h264:constrained-baseline)           return 0;;
         (*:h264:main)                           return 0;;
         (*:h264:high)                           return 0;;
-        (@($no_hevc_pattern):hevc:*)            return 1;; # HEVC
-        (*:hevc:)                               return 0;;
-        (*:hevc:main)                           return 0;;
-        (@($no_hevc_10b_pattern):hevc:main-10)  return 1;;
-        (*:hevc:main-10)                        return 0;;
         (@($no_vp8_pattern):vp8:*)              return 1;; # VP8
         (*:vp8:)                                return 0;;
-        (@($no_vp9_pattern):vp9:*)              return 1;; # VP9
-        (*:vp9:)                                return 0;;
     esac
     return 1
 }
+
 
 N_TESTS=0
 N_TESTS_PASSED=0
