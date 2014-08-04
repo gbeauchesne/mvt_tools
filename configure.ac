@@ -160,6 +160,8 @@ dnl ---------------------------------------------------------------------------
 
 AC_CONFIG_FILES([
     Makefile
+    ext/Makefile
+    ext/files/Makefile
     src/Makefile
 ])
 AC_OUTPUT
