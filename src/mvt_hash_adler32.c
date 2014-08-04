@@ -190,6 +190,17 @@ adler32_update_c_swar(MvtHashAdler32 *hash, const uint8_t *buf, uint32_t len)
     ADLER32_PACK(hash, s1, s2);
 }
 
+/* FFmpeg implementation */
+#if USE_FFMPEG
+#include <libavutil/adler32.h>
+
+static void
+adler32_update_ffmpeg(MvtHashAdler32 *hash, const uint8_t *buf, uint32_t len)
+{
+    hash->value = av_adler32_update(hash->value, buf, len);
+}
+#endif
+
 #if (defined(__x86_64__))
 typedef long long vec128i __attribute__((__vector_size__(16), __may_alias__));
 
@@ -340,6 +351,9 @@ mvt_hash_class_adler32(void)
     };
 
     if (!g_klass_initialized) {
+#if USE_FFMPEG
+        g_klass.op_update = (MvtHashUpdateFunc)adler32_update_ffmpeg;
+#endif
 #if (defined(__x86_64__) || defined(__i386__))
         /* Always enable SWAR optimizations on Intel Architectures */
         g_klass.op_update = (MvtHashUpdateFunc)adler32_update_c_swar;

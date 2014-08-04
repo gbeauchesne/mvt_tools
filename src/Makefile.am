@@ -35,6 +35,18 @@ mvt_utils_libs = \
 	$(top_builddir)/ext/libyuv/libmvt_yuv.la \
 	$(NULL)
 
+if ENABLE_BUILTIN_FFMPEG
+mvt_utils_cflags += \
+	-I$(top_srcdir)/ext/ffmpeg/upstream \
+	-I$(top_builddir)/ext/ffmpeg/upstream
+mvt_utils_libs += $(top_builddir)/ext/ffmpeg/libmvt_ffmpeg.la
+else
+if ENABLE_FFMPEG
+mvt_utils_cflags += $(LIBAVUTIL_CFLAGS)
+mvt_utils_libs += $(LIBAVUTIL_LIBS)
+endif
+endif
+
 mvt_utils_source_c = \
 	mvt_codec.c		\
 	mvt_display.c		\

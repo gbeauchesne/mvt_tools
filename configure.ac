@@ -245,8 +245,13 @@ dnl -- FFmpeg                                                                --
 dnl ---------------------------------------------------------------------------
 
 dnl Check for built-in FFmpeg
-if test "$enable_builtin_ffmpeg" = "yes"; then
+if test "$enable_ffmpeg:$enable_builtin_ffmpeg" = "yes:yes"; then
     enable_ffmpeg="yes"
+fi
+
+USE_FFMPEG=0
+if test "$enable_ffmpeg" = "yes"; then
+    USE_FFMPEG=1
 fi
 
 dnl Check for libavutil
@@ -281,6 +286,9 @@ if test "$enable_ffmpeg:$enable_builtin_ffmpeg" = "yes:no"; then
         [], [AC_MSG_ERROR([incomplete libavcodec-dev (headers) package])])
     CPPFLAGS="$saved_CPPFLAGS"
 fi
+
+AC_DEFINE_UNQUOTED([USE_FFMPEG], [$USE_FFMPEG],
+    [Defined to 1 if FFmpeg is enabled])
 
 dnl ---------------------------------------------------------------------------
 dnl -- GStreamer                                                             --
