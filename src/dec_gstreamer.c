@@ -38,6 +38,7 @@
 #endif
 #include "mvt_report.h"
 #include "mvt_decoder.h"
+#include "mvt_string.h"
 #include "mvt_image.h"
 #include "va_image_utils.h"
 
@@ -254,6 +255,12 @@ gst_to_mvt_video_format(GstVideoFormat format, VideoFormat *out_format_ptr)
 /* --- GStreamer based decoder                                          --- */
 /* ------------------------------------------------------------------------ */
 
+typedef struct {
+    guint               method;
+    guint               width;
+    guint               height;
+} VideoScaleOptions;
+
 typedef enum {
     APP_ERROR_NONE,
     APP_ERROR_PIPELINE,
@@ -269,12 +276,15 @@ typedef struct {
     GstElement         *pipeline;
     GstElement         *source;
     GstElement         *decodebin;
+    GstElement         *postprocbin;
+    GstElement         *postprocbin_head;
     GstElement         *vparse;
     gchar              *vparse_name;
     GstCaps            *vparse_capsfilter;
     GstElement         *vdecode;
     GstElement         *vsink;
     GstCaps            *vsink_caps;
+    GstElement         *vapostproc;
     GstVideoInfo        vinfo;
     guint               bus_watch_id;
     GstVaapiDisplay    *display;
@@ -282,6 +292,13 @@ typedef struct {
     GstContext         *context;
 #endif
     MvtImage           *image;
+
+    /** @name Video post-processing options */
+    /*@{*/
+    VideoScaleOptions   vscale_options;
+    /*@}*/
+
+    guint               has_vaapipostproc : 1;
     guint               gst_init_done : 1;
 } App;
 
@@ -361,6 +378,7 @@ app_finalize(App *app)
     gst_caps_replace(&app->vparse_capsfilter, NULL);
     gst_object_replace((GstObject **)&app->vparse, NULL);
     gst_object_replace((GstObject **)&app->vdecode, NULL);
+    gst_object_replace((GstObject **)&app->vapostproc, NULL);
     gst_caps_replace(&app->vsink_caps, NULL);
     g_clear_error(&app->error);
 }
@@ -763,6 +781,83 @@ on_handoff(GstElement *element, GstBuffer *buffer, GstPad *pad, App *app)
 }
 
 static gboolean
+app_init_postprocbin_for_vaapipostproc(App *app)
+{
+    GstElement *vapostproc;
+
+    g_return_val_if_fail(app->pipeline != NULL, FALSE);
+
+    vapostproc = app->vapostproc;
+    if (!vapostproc) {
+        vapostproc = gst_element_factory_make("vaapipostproc", NULL);
+        if (!vapostproc)
+            return app_pipeline_error(app, "vaapi video processing");
+        app->vapostproc = vapostproc;
+    }
+
+    if (!app->has_vaapipostproc) {
+        if (!gst_bin_add(GST_BIN(app->pipeline), g_object_ref(vapostproc)))
+            return app_pipeline_error(app, "failed to append vaapipostproc");
+        if (app->postprocbin && !gst_element_link(app->postprocbin, vapostproc))
+            return app_pipeline_error(app, "postprocbin to vaapipostproc link");
+        app->postprocbin = vapostproc;
+        if (!app->postprocbin_head)
+            app->postprocbin_head = vapostproc;
+        app->has_vaapipostproc = TRUE;
+    }
+    return TRUE;
+}
+
+/* Initializes pipeline for optional "videoscale" elements */
+static gboolean
+app_init_postprocbin_for_videoscale(App *app, const VideoScaleOptions *vso)
+{
+    const MvtDecoderOptions * const options = &app->decoder.options;
+    GstElement *vscale, *capsfilter;
+    GstCaps *caps;
+
+    if (!vso->width || !vso->height)
+        return TRUE;
+
+    switch (options->hwaccel) {
+    case MVT_HWACCEL_NONE:
+        vscale = gst_element_factory_make("videoscale", NULL);
+        if (!gst_bin_add(GST_BIN(app->pipeline), vscale))
+            return app_pipeline_error(app, "failed to append videoscale");
+
+        g_object_set(vscale, "method", vso->method, NULL);
+
+        capsfilter = gst_element_factory_make("capsfilter", NULL);
+        if (!gst_bin_add(GST_BIN(app->pipeline), capsfilter))
+            return app_pipeline_error(app, "failed to append capsfilter");
+
+        caps = gst_caps_new_simple("video/x-raw",
+            "width", G_TYPE_INT, vso->width,
+            "height", G_TYPE_INT, vso->height, NULL);
+        g_object_set(capsfilter, "caps", caps, NULL);
+        gst_caps_unref(caps);
+
+        if (app->postprocbin && !gst_element_link(app->postprocbin, vscale))
+            return app_pipeline_error(app, "postprocbin to vscale link");
+        if (!gst_element_link(vscale, capsfilter))
+            return app_pipeline_error(app, "videoscale to capsfilter link");
+
+        app->postprocbin = capsfilter;
+        if (!app->postprocbin_head)
+            app->postprocbin_head = vscale;
+        break;
+    case MVT_HWACCEL_VAAPI:
+        if (!app_init_postprocbin_for_vaapipostproc(app))
+            return FALSE;
+
+        g_object_set(app->vapostproc, "scale-method", vso->method,
+            "width", vso->width, "height", vso->height, NULL);
+        break;
+    }
+    return TRUE;
+}
+
+static gboolean
 app_init_pipeline(App *app)
 {
     const MvtDecoderOptions * const options = &app->decoder.options;
@@ -798,13 +893,25 @@ app_init_pipeline(App *app)
     g_object_set(app->vsink, "sync", FALSE, NULL);
     g_object_set(app->vsink, "signal-handoffs", TRUE, NULL);
 
-    gst_bin_add_many(GST_BIN(app->pipeline), app->source, app->decodebin,
-        app->vsink, NULL);
+    gst_bin_add_many(GST_BIN(app->pipeline), app->source, app->decodebin, NULL);
+
+    app->postprocbin = NULL;
+    app->postprocbin_head = NULL;
+
+    if (!app_init_postprocbin_for_videoscale(app, &app->vscale_options))
+        return FALSE;
+
+    if (!gst_bin_add(GST_BIN(app->pipeline), app->vsink))
+        return FALSE;
+    if (app->postprocbin && !gst_element_link(app->postprocbin, app->vsink))
+        return FALSE;
+    if (!app->postprocbin_head)
+        app->postprocbin_head = app->vsink;
 
     if (!gst_element_link(app->source, app->decodebin))
         return app_pipeline_error(app, "source to decodebin link");
     g_signal_connect(app->decodebin, "pad-added",
-        G_CALLBACK(on_pad_added), app->vsink);
+        G_CALLBACK(on_pad_added), app->postprocbin_head);
     g_signal_connect(app->decodebin, "element-added",
         G_CALLBACK(on_element_added), app);
     g_signal_connect(app->decodebin, "autoplug-query",
@@ -1006,6 +1113,32 @@ decoder_init_option(MvtDecoder *decoder, const char *key, const char *value)
         if (app->vparse_name)
             return true;
     }
+
+    /* Video scaling */
+    else if (!g_strcmp0(key, "vscale") && value) {
+        VideoScaleOptions * const vso = &app->vscale_options;
+        if (!str_parse_size(value, &vso->width, &vso->height))
+            goto error_parse_scale_size;
+        if (vso->width == 0 || vso->height == 0)
+            goto error_parse_scale_size;
+        return true;
+    }
+
+    /* Video scaling method */
+    else if (!g_strcmp0(key, "vscale_method") && value) {
+        VideoScaleOptions * const vso = &app->vscale_options;
+        if (!str_parse_uint(value, &vso->method, 10))
+            goto error_parse_scale_quality;
+        return true;
+    }
+    return false;
+
+    /* ERRORS */
+error_parse_scale_size:
+    mvt_error("failed to parse scale size argument ('%s')", value);
+    return false;
+error_parse_scale_quality:
+    mvt_error("failed to parse scale quality argument ('%s')", value);
     return false;
 }
 
