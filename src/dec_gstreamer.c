@@ -196,56 +196,58 @@ parse_codec_caps(GstCaps *caps, MvtCodec *codec_ptr, int *profile_ptr)
     return codec != 0;
 }
 
+typedef struct {
+    GstVideoFormat gst_format;
+    VideoFormat mvt_format;
+} VideoFormatMap;
+
+static const VideoFormatMap g_video_format_map[] = {
+    { GST_VIDEO_FORMAT_I420, VIDEO_FORMAT_I420 },
+    { GST_VIDEO_FORMAT_Y42B, VIDEO_FORMAT_I422 },
+    { GST_VIDEO_FORMAT_Y444, VIDEO_FORMAT_I444 },
+    { GST_VIDEO_FORMAT_YV12, VIDEO_FORMAT_YV12 },
+    { GST_VIDEO_FORMAT_NV12, VIDEO_FORMAT_NV12 },
+    { GST_VIDEO_FORMAT_YUY2, VIDEO_FORMAT_YUY2 },
+    { GST_VIDEO_FORMAT_UYVY, VIDEO_FORMAT_UYVY },
+    { GST_VIDEO_FORMAT_AYUV, VIDEO_FORMAT_AYUV },
+    { GST_VIDEO_FORMAT_NE(I420_10), VIDEO_FORMAT_I420P10 },
+    { GST_VIDEO_FORMAT_NE(I422_10), VIDEO_FORMAT_I422P10 },
+#if GST_CHECK_VERSION(1,1,0)
+    { GST_VIDEO_FORMAT_NE(Y444_10), VIDEO_FORMAT_I444P10 },
+#endif
+    { GST_VIDEO_FORMAT_UNKNOWN, VIDEO_FORMAT_UNKNOWN }
+};
+
+// Translates MVT video format to GstVideoFormat
+static bool
+mvt_to_gst_video_format(VideoFormat format, GstVideoFormat *out_format_ptr)
+{
+    const VideoFormatMap *m;
+
+    for (m = g_video_format_map; m->mvt_format != VIDEO_FORMAT_UNKNOWN; m++) {
+        if (m->mvt_format == format) {
+            if (out_format_ptr)
+                *out_format_ptr = m->gst_format;
+            return true;
+        }
+    }
+    return false;
+}
+
 // Translates GstVideoFormat to MVT video format
 static bool
 gst_to_mvt_video_format(GstVideoFormat format, VideoFormat *out_format_ptr)
 {
-    VideoFormat out_format;
+    const VideoFormatMap *m;
 
-    switch (format) {
-    case GST_VIDEO_FORMAT_I420:
-        out_format = VIDEO_FORMAT_I420;
-        break;
-    case GST_VIDEO_FORMAT_Y42B:
-        out_format = VIDEO_FORMAT_I422;
-        break;
-    case GST_VIDEO_FORMAT_Y444:
-        out_format = VIDEO_FORMAT_I444;
-        break;
-    case GST_VIDEO_FORMAT_YV12:
-        out_format = VIDEO_FORMAT_YV12;
-        break;
-    case GST_VIDEO_FORMAT_NV12:
-        out_format = VIDEO_FORMAT_NV12;
-        break;
-    case GST_VIDEO_FORMAT_YUY2:
-        out_format = VIDEO_FORMAT_YUY2;
-        break;
-    case GST_VIDEO_FORMAT_UYVY:
-        out_format = VIDEO_FORMAT_UYVY;
-        break;
-    case GST_VIDEO_FORMAT_AYUV:
-        out_format = VIDEO_FORMAT_AYUV;
-        break;
-    case GST_VIDEO_FORMAT_NE(I420_10):
-        out_format = VIDEO_FORMAT_I420P10;
-        break;
-    case GST_VIDEO_FORMAT_NE(I422_10):
-        out_format = VIDEO_FORMAT_I422P10;
-        break;
-    case GST_VIDEO_FORMAT_NE(Y444_10):
-        out_format = VIDEO_FORMAT_I444P10;
-        break;
-    default:
-        out_format = VIDEO_FORMAT_UNKNOWN;
-        break;
+    for (m = g_video_format_map; m->gst_format != GST_VIDEO_FORMAT_UNKNOWN; m++) {
+        if (m->gst_format == format) {
+            if (out_format_ptr)
+                *out_format_ptr = m->mvt_format;
+            return true;
+        }
     }
-    if (!out_format)
-        return false;
-
-    if (out_format_ptr)
-        *out_format_ptr = out_format;
-    return true;
+    return false;
 }
 
 /* ------------------------------------------------------------------------ */
