@@ -261,6 +261,10 @@ typedef struct {
     guint               height;
 } VideoScaleOptions;
 
+typedef struct {
+    VideoFormat         format;
+} VideoConvertOptions;
+
 typedef enum {
     APP_ERROR_NONE,
     APP_ERROR_PIPELINE,
@@ -296,6 +300,7 @@ typedef struct {
     /** @name Video post-processing options */
     /*@{*/
     VideoScaleOptions   vscale_options;
+    VideoConvertOptions vconvert_options;
     /*@}*/
 
     guint               has_vaapipostproc : 1;
@@ -808,6 +813,55 @@ app_init_postprocbin_for_vaapipostproc(App *app)
     return TRUE;
 }
 
+/* Initializes pipeline for optional "videoconvert" elements */
+static gboolean
+app_init_postprocbin_for_videoconvert(App *app, const VideoConvertOptions *vco)
+{
+    const MvtDecoderOptions * const options = &app->decoder.options;
+    GstElement *vconvert, *capsfilter;
+    GstVideoFormat out_format;
+    GstCaps *caps;
+
+    if (!vco->format || vco->format == VIDEO_FORMAT_ENCODED)
+        return TRUE;
+
+    if (!mvt_to_gst_video_format(vco->format, &out_format))
+        return app_pipeline_error(app, "unsupported video format");
+
+    switch (options->hwaccel) {
+    case MVT_HWACCEL_NONE:
+        vconvert = gst_element_factory_make("videoconvert", NULL);
+        if (!gst_bin_add(GST_BIN(app->pipeline), vconvert))
+            return app_pipeline_error(app, "failed to append videoconvert");
+
+        capsfilter = gst_element_factory_make("capsfilter", NULL);
+        if (!gst_bin_add(GST_BIN(app->pipeline), capsfilter))
+            return app_pipeline_error(app, "failed to append capsfilter");
+
+        caps = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING,
+            gst_video_format_to_string(out_format), NULL);
+        g_object_set(capsfilter, "caps", caps, NULL);
+        gst_caps_unref(caps);
+
+        if (app->postprocbin && !gst_element_link(app->postprocbin, vconvert))
+            return app_pipeline_error(app, "postprocbin to vconvert link");
+        if (!gst_element_link(vconvert, capsfilter))
+            return app_pipeline_error(app, "videoconvert to capsfilter link");
+
+        app->postprocbin = capsfilter;
+        if (!app->postprocbin_head)
+            app->postprocbin_head = vconvert;
+        break;
+    case MVT_HWACCEL_VAAPI:
+        if (!app_init_postprocbin_for_vaapipostproc(app))
+            return FALSE;
+
+        g_object_set(app->vapostproc, "format", out_format, NULL);
+        break;
+    }
+    return TRUE;
+}
+
 /* Initializes pipeline for optional "videoscale" elements */
 static gboolean
 app_init_postprocbin_for_videoscale(App *app, const VideoScaleOptions *vso)
@@ -898,6 +952,8 @@ app_init_pipeline(App *app)
     app->postprocbin = NULL;
     app->postprocbin_head = NULL;
 
+    if (!app_init_postprocbin_for_videoconvert(app, &app->vconvert_options))
+        return FALSE;
     if (!app_init_postprocbin_for_videoscale(app, &app->vscale_options))
         return FALSE;
 
@@ -1114,6 +1170,15 @@ decoder_init_option(MvtDecoder *decoder, const char *key, const char *value)
             return true;
     }
 
+    /* Video convert */
+    else if (!g_strcmp0(key, "vconvert") && value) {
+        VideoConvertOptions * const vco = &app->vconvert_options;
+        vco->format = video_format_from_name(value);
+        if (!vco->format)
+            goto error_parse_format;
+        return true;
+    }
+
     /* Video scaling */
     else if (!g_strcmp0(key, "vscale") && value) {
         VideoScaleOptions * const vso = &app->vscale_options;
@@ -1134,6 +1199,9 @@ decoder_init_option(MvtDecoder *decoder, const char *key, const char *value)
     return false;
 
     /* ERRORS */
+error_parse_format:
+    mvt_error("failed to parse format argument ('%s')", value);
+    return false;
 error_parse_scale_size:
     mvt_error("failed to parse scale size argument ('%s')", value);
     return false;
