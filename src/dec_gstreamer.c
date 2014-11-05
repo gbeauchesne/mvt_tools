@@ -255,10 +255,14 @@ gst_to_mvt_video_format(GstVideoFormat format, VideoFormat *out_format_ptr)
 /* --- GStreamer based decoder                                          --- */
 /* ------------------------------------------------------------------------ */
 
+/* Maximum number of chained video processing elements (used for validation) */
+#define MAX_VPP_CHAIN 2
+
 typedef struct {
     guint               method;
     guint               width;
     guint               height;
+    gboolean            is_valid;
 } VideoScaleOptions;
 
 typedef struct {
@@ -288,7 +292,8 @@ typedef struct {
     GstElement         *vdecode;
     GstElement         *vsink;
     GstCaps            *vsink_caps;
-    GstElement         *vapostproc;
+    GstElement         *vapostproc[MAX_VPP_CHAIN];
+    guint               vapostproc_mask;
     GstVideoInfo        vinfo;
     guint               bus_watch_id;
     GstVaapiDisplay    *display;
@@ -299,11 +304,10 @@ typedef struct {
 
     /** @name Video post-processing options */
     /*@{*/
-    VideoScaleOptions   vscale_options;
+    VideoScaleOptions   vscale_options[MAX_VPP_CHAIN];
     VideoConvertOptions vconvert_options;
     /*@}*/
 
-    guint               has_vaapipostproc : 1;
     guint               gst_init_done : 1;
 } App;
 
@@ -366,6 +370,8 @@ app_init(App *app)
 static void
 app_finalize(App *app)
 {
+    guint i;
+
 #if GST_CHECK_VERSION(1,1,0)
     if (app->context)
         gst_context_unref(app->context);
@@ -383,7 +389,8 @@ app_finalize(App *app)
     gst_caps_replace(&app->vparse_capsfilter, NULL);
     gst_object_replace((GstObject **)&app->vparse, NULL);
     gst_object_replace((GstObject **)&app->vdecode, NULL);
-    gst_object_replace((GstObject **)&app->vapostproc, NULL);
+    for (i = 0; i < G_N_ELEMENTS(app->vapostproc); i++)
+        gst_object_replace((GstObject **)&app->vapostproc[i], NULL);
     gst_caps_replace(&app->vsink_caps, NULL);
     g_clear_error(&app->error);
 }
@@ -786,21 +793,21 @@ on_handoff(GstElement *element, GstBuffer *buffer, GstPad *pad, App *app)
 }
 
 static gboolean
-app_init_postprocbin_for_vaapipostproc(App *app)
+app_init_postprocbin_for_vaapipostproc(App *app, guint n)
 {
     GstElement *vapostproc;
 
     g_return_val_if_fail(app->pipeline != NULL, FALSE);
 
-    vapostproc = app->vapostproc;
+    vapostproc = app->vapostproc[n];
     if (!vapostproc) {
         vapostproc = gst_element_factory_make("vaapipostproc", NULL);
         if (!vapostproc)
             return app_pipeline_error(app, "vaapi video processing");
-        app->vapostproc = vapostproc;
+        app->vapostproc[n] = vapostproc;
     }
 
-    if (!app->has_vaapipostproc) {
+    if (!(app->vapostproc_mask & (1U << n))) {
         if (!gst_bin_add(GST_BIN(app->pipeline), g_object_ref(vapostproc)))
             return app_pipeline_error(app, "failed to append vaapipostproc");
         if (app->postprocbin && !gst_element_link(app->postprocbin, vapostproc))
@@ -808,7 +815,7 @@ app_init_postprocbin_for_vaapipostproc(App *app)
         app->postprocbin = vapostproc;
         if (!app->postprocbin_head)
             app->postprocbin_head = vapostproc;
-        app->has_vaapipostproc = TRUE;
+        app->vapostproc_mask |= 1U << n;
     }
     return TRUE;
 }
@@ -853,10 +860,10 @@ app_init_postprocbin_for_videoconvert(App *app, const VideoConvertOptions *vco)
             app->postprocbin_head = vconvert;
         break;
     case MVT_HWACCEL_VAAPI:
-        if (!app_init_postprocbin_for_vaapipostproc(app))
+        if (!app_init_postprocbin_for_vaapipostproc(app, 0))
             return FALSE;
 
-        g_object_set(app->vapostproc, "format", out_format, NULL);
+        g_object_set(app->vapostproc[0], "format", out_format, NULL);
         break;
     }
     return TRUE;
@@ -864,7 +871,8 @@ app_init_postprocbin_for_videoconvert(App *app, const VideoConvertOptions *vco)
 
 /* Initializes pipeline for optional "videoscale" elements */
 static gboolean
-app_init_postprocbin_for_videoscale(App *app, const VideoScaleOptions *vso)
+app_init_postprocbin_for_videoscale(App *app, const VideoScaleOptions *vso,
+    guint n)
 {
     const MvtDecoderOptions * const options = &app->decoder.options;
     GstElement *vscale, *capsfilter;
@@ -901,11 +909,16 @@ app_init_postprocbin_for_videoscale(App *app, const VideoScaleOptions *vso)
             app->postprocbin_head = vscale;
         break;
     case MVT_HWACCEL_VAAPI:
-        if (!app_init_postprocbin_for_vaapipostproc(app))
+        if (!app_init_postprocbin_for_vaapipostproc(app, n))
             return FALSE;
 
-        g_object_set(app->vapostproc, "scale-method", vso->method,
+        g_object_set(app->vapostproc[n], "scale-method", vso->method,
             "width", vso->width, "height", vso->height, NULL);
+
+        /* XXX: force NV12 format negotiation */
+        if (n == 0 && !app->vconvert_options.format)
+            g_object_set(app->vapostproc[n], "format", GST_VIDEO_FORMAT_NV12,
+                NULL);
         break;
     }
     return TRUE;
@@ -915,6 +928,7 @@ static gboolean
 app_init_pipeline(App *app)
 {
     const MvtDecoderOptions * const options = &app->decoder.options;
+    guint i;
 
     struct map_entry {
         GstElement    **element_ptr;    // pointer to resulting element
@@ -954,8 +968,11 @@ app_init_pipeline(App *app)
 
     if (!app_init_postprocbin_for_videoconvert(app, &app->vconvert_options))
         return FALSE;
-    if (!app_init_postprocbin_for_videoscale(app, &app->vscale_options))
-        return FALSE;
+    for (i = 0; i < G_N_ELEMENTS(app->vscale_options); i++) {
+        const VideoScaleOptions * const vso = &app->vscale_options[i];
+        if (vso->is_valid && !app_init_postprocbin_for_videoscale(app, vso, i))
+            return FALSE;
+    }
 
     if (!gst_bin_add(GST_BIN(app->pipeline), app->vsink))
         return FALSE;
@@ -1146,6 +1163,7 @@ static bool
 decoder_init_option(MvtDecoder *decoder, const char *key, const char *value)
 {
     App * const app = (App *)decoder;
+    const char *subkey;
     GstCaps *caps;
 
     if (!app_init_gst(app))
@@ -1180,21 +1198,33 @@ decoder_init_option(MvtDecoder *decoder, const char *key, const char *value)
     }
 
     /* Video scaling */
-    else if (!g_strcmp0(key, "vscale") && value) {
-        VideoScaleOptions * const vso = &app->vscale_options;
-        if (!str_parse_size(value, &vso->width, &vso->height))
-            goto error_parse_scale_size;
-        if (vso->width == 0 || vso->height == 0)
-            goto error_parse_scale_size;
-        return true;
-    }
+    else if (!strncmp(key, "vscale", 6) && value) {
+        VideoScaleOptions *vso;
+        guint n = 0;
 
-    /* Video scaling method */
-    else if (!g_strcmp0(key, "vscale_method") && value) {
-        VideoScaleOptions * const vso = &app->vscale_options;
-        if (!str_parse_uint(value, &vso->method, 10))
-            goto error_parse_scale_quality;
-        return true;
+        for (subkey = &key[6]; *subkey && g_ascii_isdigit(*subkey); subkey++)
+            n = (n * 10) + (*subkey - '0');
+
+        if (n > 0 && --n >= G_N_ELEMENTS(app->vscale_options))
+            goto error_max_vpp_chain_reached;
+        vso = &app->vscale_options[n];
+
+        /* output size */
+        if (!*subkey) {
+            if (!str_parse_size(value, &vso->width, &vso->height))
+                goto error_parse_scale_size;
+            if (vso->width == 0 || vso->height == 0)
+                goto error_parse_scale_size;
+            vso->is_valid = true;
+            return true;
+        }
+
+        /* method */
+        else if (!g_strcmp0(subkey, "_method")) {
+            if (!str_parse_uint(value, &vso->method, 10))
+                goto error_parse_scale_quality;
+            return true;
+        }
     }
     return false;
 
@@ -1207,6 +1237,9 @@ error_parse_scale_size:
     return false;
 error_parse_scale_quality:
     mvt_error("failed to parse scale quality argument ('%s')", value);
+    return false;
+error_max_vpp_chain_reached:
+    mvt_error("reached max number of chained VPP elements ('%s')", key);
     return false;
 }
 
