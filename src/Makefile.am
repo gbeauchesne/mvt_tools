@@ -8,6 +8,7 @@ noinst_LTLIBRARIES += libdec_ffmpeg.la
 endif
 
 pkglibexec_PROGRAMS = gen_ref_rawvideo
+pkglibexec_PROGRAMS += cmp_video
 if ENABLE_FFMPEG
 pkglibexec_PROGRAMS += dec_ffmpeg
 endif
@@ -206,6 +207,15 @@ gen_ref_rawvideo_CFLAGS		= $(mvt_utils_cflags)
 gen_ref_rawvideo_LDADD		= libmvt_utils.la $(mvt_utils_libs)
 
 # -----------------------------------------------------------------------------
+# --- Video comparison tool                                                 ---
+# -----------------------------------------------------------------------------
+
+cmp_video_source_c		= cmp_video.c
+cmp_video_SOURCES		= $(cmp_video_source_c)
+cmp_video_CFLAGS		= $(mvt_utils_cflags)
+cmp_video_LDADD			= libmvt_utils.la $(mvt_utils_libs)
+
+# -----------------------------------------------------------------------------
 # --- Reference H.264 decoder (JM)                                          ---
 # -----------------------------------------------------------------------------
 
@@ -242,6 +252,8 @@ gen_ref_vpx_CFLAGS	= $(VPX_CFLAGS) $(libdec_ffmpeg_cflags)
 gen_ref_vpx_LDADD	= $(VPX_LIBS) libdec_ffmpeg.la -ldl
 
 EXTRA_DIST = \
+	$(cmp_video_source_c)		\
+	$(cmp_video_source_h)		\
 	$(mvt_decoder_source_c)		\
 	$(mvt_decoder_source_h)		\
 	$(mvt_utils_source_h)		\
