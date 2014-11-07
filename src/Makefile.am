@@ -54,6 +54,7 @@ mvt_utils_source_c = \
 	mvt_hash_adler32.c	\
 	mvt_hash_md5.c		\
 	mvt_image.c		\
+	mvt_image_compare.c	\
 	mvt_image_convert.c	\
 	mvt_image_file.c	\
 	mvt_image_hash.c	\
@@ -73,6 +74,7 @@ mvt_utils_source_h = \
 	mvt_hash.h		\
 	mvt_hash_priv.h		\
 	mvt_image.h		\
+	mvt_image_compare.h	\
 	mvt_image_file.h	\
 	mvt_image_priv.h	\
 	mvt_macros.h		\
