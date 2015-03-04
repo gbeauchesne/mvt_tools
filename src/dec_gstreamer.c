@@ -740,18 +740,54 @@ static void
 on_element_added(GstBin *bin, GstElement *element, App *app)
 {
     GstElementFactory * const factory = gst_element_get_factory(element);
+    GstElement *child_element, *found_element = NULL;
     gpointer element_ptr = NULL;
 
     /* Video decoder */
-    if (is_video_decoder_factory(factory))
+    if (is_video_decoder_factory(factory)) {
         element_ptr = &app->vdecode;
 
+        if (GST_IS_BIN(element)) {
+            GstIterator *it = gst_bin_iterate_elements(GST_BIN(element));
+            GValue item = G_VALUE_INIT;
+            gboolean done = FALSE;
+            do {
+                switch (gst_iterator_next(it, &item)) {
+                case GST_ITERATOR_OK:
+                    child_element = g_value_get_object(&item);
+                    done = is_video_decoder_factory(
+                        gst_element_get_factory(child_element));
+                    if (done)
+                        found_element = gst_object_ref(child_element);
+                    g_value_reset(&item);
+                    break;
+                case GST_ITERATOR_RESYNC:
+                    gst_iterator_resync(it);
+                    break;
+                case GST_ITERATOR_ERROR:
+                    done = TRUE;
+                    break;
+                case GST_ITERATOR_DONE:
+                    done = TRUE;
+                    break;
+                }
+            } while (!done);
+            g_value_unset(&item);
+            gst_iterator_free(it);
+        }
+        else
+            found_element = gst_object_ref(element);
+    }
+
     /* Video parser */
-    else if (is_video_parser_factory(factory))
+    else if (is_video_parser_factory(factory)) {
         element_ptr = &app->vparse;
+        found_element = gst_object_ref(element);
+    }
 
     if (element_ptr)
-        gst_object_replace(element_ptr, (GstObject *)element);
+        gst_object_replace(element_ptr, (GstObject *)found_element);
+    g_clear_object(&found_element);
 }
 
 static gboolean
