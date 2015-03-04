@@ -718,6 +718,24 @@ on_pad_added(GstElement *element, GstPad *pad, GstElement *vsink)
     gst_object_unref(sinkpad);
 }
 
+static inline gboolean
+is_video_decoder_factory(GstElementFactory *factory)
+{
+    return gst_element_factory_list_is_type(factory,
+        GST_ELEMENT_FACTORY_TYPE_DECODER |
+        (GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO |
+         GST_ELEMENT_FACTORY_TYPE_MEDIA_IMAGE));
+}
+
+static inline gboolean
+is_video_parser_factory(GstElementFactory *factory)
+{
+    return gst_element_factory_list_is_type(factory,
+        GST_ELEMENT_FACTORY_TYPE_PARSER |
+        (GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO |
+         GST_ELEMENT_FACTORY_TYPE_MEDIA_IMAGE));
+}
+
 static void
 on_element_added(GstBin *bin, GstElement *element, App *app)
 {
@@ -725,17 +743,11 @@ on_element_added(GstBin *bin, GstElement *element, App *app)
     gpointer element_ptr = NULL;
 
     /* Video decoder */
-    if (gst_element_factory_list_is_type(factory,
-            GST_ELEMENT_FACTORY_TYPE_DECODER |
-            (GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO |
-             GST_ELEMENT_FACTORY_TYPE_MEDIA_IMAGE)))
+    if (is_video_decoder_factory(factory))
         element_ptr = &app->vdecode;
 
     /* Video parser */
-    else if (gst_element_factory_list_is_type(factory,
-                 GST_ELEMENT_FACTORY_TYPE_PARSER |
-                 (GST_ELEMENT_FACTORY_TYPE_MEDIA_VIDEO |
-                  GST_ELEMENT_FACTORY_TYPE_MEDIA_IMAGE)))
+    else if (is_video_parser_factory(factory))
         element_ptr = &app->vparse;
 
     if (element_ptr)
