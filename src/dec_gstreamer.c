@@ -698,6 +698,11 @@ on_autoplug_select(GstElement *element, GstPad *pad, GstCaps *caps,
              GST_ELEMENT_FACTORY_TYPE_MEDIA_IMAGE)))
         return GST_AUTOPLUG_SELECT_TRY;
 
+    /* Filter out "vaapidecodebin" as we don't want auto-insertion of
+       vaapipostproc, which would enable deinterlacing for instance */
+    if (!strncmp(element_name, "vaapidecodebin", 14))
+        return GST_AUTOPLUG_SELECT_SKIP;
+
     /* Filter out/in hardware accelerated decoders when needed */
     if (!strncmp(element_name, "vaapi", 5))
         return options->hwaccel == MVT_HWACCEL_VAAPI ?
